@@ -1,0 +1,93 @@
+/* 蝦米 Agent Web UI v3.1 - 樣式表 */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', 'Microsoft JhengHei', Arial, sans-serif; display: flex; height: 100vh; background: #f5f5f5; }
+
+/* 左側邊欄：Session 列表 + 檔案總管 */
+#sidebar { width: 320px; background: white; border-right: 1px solid #ddd; display: flex; flex-direction: column; flex-shrink: 0; }
+
+/* Session 區域 */
+#session-panel { flex: 1; overflow-y: auto; border-bottom: 1px solid #ddd; }
+#session-header { padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-size: 16px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+#new-session-btn { background: rgba(255,255,255,0.2); border: none; border-radius: 4px; color: white; cursor: pointer; padding: 5px 10px; font-size: 13px; transition: background 0.2s; }
+#new-session-btn:hover { background: rgba(255,255,255,0.3); }
+
+.session-item { padding: 12px 15px; border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.2s; position: relative; }
+.session-item:hover { background: #f0f4ff; }
+.session-item.active { background: #e8f0ff; border-left: 3px solid #667eea; }
+.session-name { font-size: 14px; color: #333; font-weight: 500; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-meta { font-size: 12px; color: #999; display: flex; justify-content: space-between; }
+.session-actions { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: none; gap: 5px; }
+.session-item:hover .session-actions { display: flex; }
+.session-actions button { padding: 3px 8px; font-size: 11px; border: none; border-radius: 3px; cursor: pointer; }
+.btn-rename { background: #0078d4; color: white; }
+.btn-delete { background: #dc3545; color: white; }
+
+/* 檔案總管區域 */
+#file-manager { height: 40%; overflow-y: auto; }
+#file-header { padding: 12px 15px; background: #f8f9fa; border-bottom: 1px solid #eee; font-size: 14px; font-weight: 600; color: #666; display: flex; justify-content: space-between; align-items: center; }
+#refresh-btn { background: transparent; border: none; cursor: pointer; font-size: 16px; padding: 5px; }
+.breadcrumb { padding: 8px 15px; background: #f8f9fa; border-bottom: 1px solid #eee; font-size: 12px; color: #666; }
+.file-item { padding: 10px 15px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; align-items: center; transition: background 0.2s; }
+.file-item:hover { background: #f0f4ff; }
+.file-item.folder { background: #fff8e1; }
+.file-icon { margin-right: 10px; font-size: 18px; }
+.file-name { flex: 1; font-size: 13px; color: #333; }
+.file-size { font-size: 11px; color: #999; margin-right: 8px; }
+
+#upload-area { padding: 12px 15px; border-top: 1px solid #ddd; background: #f8f9fa; }
+#upload-btn { width: 100%; padding: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
+#file-input { display: none; }
+
+/* 右側：聊天區域 */
+#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+#chat-container { flex: 1; display: flex; flex-direction: column; padding: 20px; max-width: 1200px; margin: 0 auto; width: 100%; overflow: hidden; }
+#chat { flex: 1; border: 1px solid #ddd; border-radius: 12px; padding: 20px; overflow-y: auto; background: white; margin-bottom: 15px; max-height: calc(100vh - 200px); }
+.message { margin-bottom: 15px; padding: 12px 18px; border-radius: 12px; max-width: 75%; line-height: 1.5; }
+.message.user { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin-left: auto; }
+.message.shrimp { background: #e8f5e9; color: #2e7d32; margin-right: auto; }
+.message.system { background: #fff3cd; color: #856404; margin: 10px auto; text-align: center; font-size: 13px; }
+.message.tools { background: #fff8e1; color: #856404; font-size: 13px; margin: 5px auto; }
+
+#input-area { display: flex; gap: 10px; }
+#input { flex: 1; padding: 14px 18px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+#input:focus { outline: none; border-color: #667eea; }
+#send-btn { padding: 14px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+#send-btn:hover { transform: translateY(-2px); }
+
+/* Modal */
+#preview, #rename-modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; }
+#preview-content, #rename-content { background: white; margin: 40px auto; padding: 25px; border-radius: 12px; max-width: 900px; max-height: 85vh; overflow-y: auto; }
+#preview-close, #rename-close { float: right; font-size: 28px; cursor: pointer; }
+#preview-body { white-space: pre-wrap; font-family: monospace; font-size: 13px; }
+#rename-input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; margin: 15px 0; }
+#rename-save { padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; }
+
+/* Loading */
+.loading { display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* Status bar */
+#status-bar { padding: 8px 20px; background: #f8f9fa; border-top: 1px solid #ddd; font-size: 12px; display: flex; justify-content: space-between; }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 40px 20px; color: #999; }
+.empty-state-icon { font-size: 48px; margin-bottom: 15px; }
+
+/* 虛擬人選擇下拉選單 */
+#vh-style-select { outline: none; }
+#vh-style-select:focus { border-color: #667eea; }
+
+/* Tab 切換 */
+#vh-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+.vh-tab { flex: 1; padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; }
+.vh-tab-general { background: rgba(255,255,255,0.3); color: white; }
+.vh-tab-general:hover { background: rgba(255,255,255,0.4); }
+.vh-tab-general.active { background: white; color: #667eea; }
+.vh-tab-style { background: rgba(255,255,255,0.2); color: white; }
+.vh-tab-style:hover { background: rgba(255,255,255,0.3); }
+.vh-tab-style.active { background: white; color: #764ba2; }
+
+#vh-style-selector { display: none; padding: 8px; background: rgba(255,255,255,0.2); border-radius: 6px; margin-bottom: 10px; }
+#vh-style-selector.visible { display: block; }
+#vh-style-selector select { width: 100%; padding: 6px; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; background: rgba(255,255,255,0.9); color: #333; font-size: 13px; cursor: pointer; }

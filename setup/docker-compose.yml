@@ -1,0 +1,101 @@
+services:
+  # ============= Agent API 服務（內建 Session 模組） =============
+  agent:
+    build:
+      context: ..
+      dockerfile: agent/Dockerfile
+    container_name: shrimp-agent
+    
+    # 暴露 Agent API 端口（localhost only）
+    ports:
+      - "127.0.0.1:8000:8000"
+    
+    # 使用相對路徑（跨平台相容）
+    volumes:
+      - ../agent/shared:/app/shared:rw
+      - ../agent/virtual_human:/app/virtual_human:rw
+      - ../agent/backend_operator:/app/backend_operator:rw
+      - ../session:/app/session:rw    # Session 模組（平行目錄）
+      - ../frontend:/app/frontend:rw
+      - ../config:/config:rw          # CONFIG 目錄（虛擬人配置）
+      - ../workspace:/workspace:rw
+      - ../downloads:/downloads:rw
+      - ../knowledge:/knowledge:rw    # KNOWLEDGE 目錄
+      - ../data:/data:rw              # SQLite 持久化（Session）
+    
+    # 工作目錄
+    working_dir: /app
+    
+    # 環境變數
+    env_file:
+      - .env
+    
+    # KNOWLEDGE 相關配置
+    environment:
+      - KNOWLEDGE_BASE_PATH=/knowledge
+      - KNOWLEDGE_PASSPHRASE=${KNOWLEDGE_PASSPHRASE:-5688}
+    
+    # 安全限制
+    read_only: true
+    tmpfs:
+      - /tmp:size=300M,mode=1777
+      - /var/tmp:size=100M,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    
+    # 資源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+    
+    restart: unless-stopped
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "python", "-c", "print('healthy')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # 網路配置
+    networks:
+      - shrimp-network
+
+  # ============= Web UI 服務 =============
+  web:
+    build:
+      context: ..
+      dockerfile: agent/Dockerfile
+    container_name: shrimp-web
+    command: python app.py
+    
+    # 掛載 frontend 模板和靜態文件（開發用熱重載）
+    volumes:
+      - ../frontend:/app/frontend:rw  # 提供模板和靜態文件
+      - ../workspace:/workspace:rw
+      - ../downloads:/downloads:rw
+    
+    environment:
+      - AGENT_API_URL=http://agent:8000
+    
+    # Web UI 綁定到 localhost（安全）
+    ports:
+      - "127.0.0.1:5000:5000"
+    
+    depends_on:
+      - agent
+    
+    restart: unless-stopped
+    
+    networks:
+      - shrimp-network
+
+# ============= 網路配置 =============
+networks:
+  shrimp-network:
+    driver: bridge

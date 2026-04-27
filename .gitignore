@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 虛擬環境
+venv/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+.docker/
+
+# 日誌
+*.log
+
+# 知識庫（可選，如果不想提交知識庫內容）
+# /knowledge/*.txt
+# /knowledge/*/meta.json
+
+# 測試報告
+tests/rag/test_report*.json
+tests/rag/test_results.json
+tests/rag/test_*.json
+docs/archive/
+
+# Data
+data/*.db
+data/sessions.db

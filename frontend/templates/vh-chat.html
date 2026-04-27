@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎭 虛擬人對話 - 蝦米 Agent</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- 左側邊欄 -->
+    <div id="sidebar">
+        <!-- Session 列表 -->
+        <div id="session-panel">
+            <div id="session-header">
+                🎭 虛擬人對話
+            </div>
+            
+            <!-- 風格選擇器 -->
+            <div style="padding:15px;background:linear-gradient(135deg, #764ba2 0%, #667eea 100%);">
+                <label style="color:white;font-size:13px;font-weight:600;margin-bottom:8px;display:block;">選擇風格：</label>
+                <select id="vh-style-select" style="width:100%;padding:10px;border:none;border-radius:6px;background:rgba(255,255,255,0.95);color:#333;font-size:14px;cursor:pointer;">
+                    <option value="ubichan">🎭 優必醬</option>
+                    <option value="nurse">👩‍⚕️ 護士姐姐</option>
+                </select>
+                
+                <button id="new-session-btn" onclick="createNewSession()" style="width:100%;margin-top:10px;padding:10px;background:rgba(255,255,255,0.2);border:none;border-radius:6px;color:white;cursor:pointer;font-size:14px;font-weight:600;transition:background 0.2s;" title="新增對話">➕ 新增對話</button>
+            </div>
+            
+            <div id="session-list">
+                <div class="empty-state">
+                    <div class="empty-state-icon">💭</div>
+                    <div>載入中...</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 檔案總管 -->
+        <div id="file-manager">
+            <div id="file-header">
+                📁 檔案總管
+                <button id="refresh-btn" onclick="loadFiles(currentPath)" title="刷新">🔄</button>
+            </div>
+            <div class="breadcrumb" id="breadcrumb">📍 /workspace</div>
+            <div id="file-list"></div>
+            <div id="upload-area">
+                <button id="upload-btn" onclick="document.getElementById('file-input').click()">⬆️ 上傳檔案</button>
+                <input id="file-input" type="file" onchange="uploadFile(this)">
+            </div>
+        </div>
+    </div>
+    
+    <!-- 右側：聊天區域 -->
+    <div id="main">
+        <div id="chat-container">
+            <div id="chat">
+                <div class="message shrimp">
+                    🦐 你好！這是 **虛擬人對話** 頁面
+                    <br><br>
+                    🎭 選擇上方的風格開始對話：
+                    <br>• **優必醬** - 活潑可愛的虛擬助手
+                    <br>• **護士姐姐** - 溫柔專業的醫療顧問
+                    <br><br>
+                    💬 每種風格都有獨特的個性和回應方式！
+                </div>
+            </div>
+            <div id="input-area">
+                <input id="input" placeholder="輸入訊息... (Shift+Enter 換行)" onkeypress="handleKeyPress(event)">
+                <button id="send-btn" onclick="send()">發送</button>
+            </div>
+        </div>
+        <div id="status-bar">
+            <span id="status-path">📁 /workspace</span>
+            <span id="status-session">💬 未選擇 Session</span>
+            <span id="status-connection">🟢 已連線</span>
+            <span id="status-timestamp"></span>
+        </div>
+    </div>
+    
+    <!-- 預覽 Modal -->
+    <div id="preview">
+        <div id="preview-content">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <span id="preview-title" style="font-size:18px;font-weight:600;">📄 檔案預覽</span>
+                <span id="preview-close" onclick="closePreview()">&times;</span>
+            </div>
+            <div id="preview-body"></div>
+        </div>
+    </div>
+    
+    <script src="/static/js/vh-chat.js"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+# OpenAI API
+openai>=1.0.0
+
+# 環境變數
+python-dotenv>=1.0.0
+
+# Web UI (Flask)
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# Agent API (FastAPI)
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.0.0
+
+# HTTP 請求
+requests>=2.31.0
+
+# 文件處理
+pandas>=2.0.0
+openpyxl>=3.1.0
+python-docx>=1.0.0
+pdfplumber>=0.10.0
+
+# 網頁搜尋
+duckduckgo-search>=4.0.0
+
+# YAML 配置解析
+pyyaml>=6.0

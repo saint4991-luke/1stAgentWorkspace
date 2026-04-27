@@ -1,0 +1,58 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-04-02T07:10:00Z",
+  "knowledge_id": "ubitus",
+  "files": [
+    {
+      "name": "products.txt",
+      "summary": "優必達產品線完整介紹：UbiGPT（AI 對話助手）、UbiAnchor（雲端遊戲平台）、UbiArt（AI 藝術生成）、Ubi-chan（虛擬 VTuber）、UbiONE（整合解決方案）。包含各產品的類型、功能說明、應用場景與產品特色（低延遲、高品質、可客製化、多語言支援）。",
+      "keywords": [
+        "產品",
+        "UbiGPT",
+        "UbiAnchor",
+        "UbiArt",
+        "Ubi-chan",
+        "UbiONE",
+        "AI 對話",
+        "雲端遊戲",
+        "虛擬人",
+        "VTuber"
+      ],
+      "size_bytes": 911,
+      "line_count": 32
+    },
+    {
+      "name": "company.txt",
+      "summary": "優必達公司介紹：公司全名（優必達科技股份有限公司/Ubitus K.K.）、成立時間（2008 年）、總部地點（台北市松山區）。核心技術包含雲端串流、低延遲編碼、分散式伺服器架構、AI 驅動資源優化。完整產品線列表與聯絡資訊（地址、網站）。",
+      "keywords": [
+        "公司",
+        "優必達",
+        "Ubitus",
+        "成立時間",
+        "總部",
+        "核心技術",
+        "雲端串流",
+        "聯絡資訊",
+        "公司簡介"
+      ],
+      "size_bytes": 686,
+      "line_count": 25
+    },
+    {
+      "name": "faq.txt",
+      "summary": "優必達常見問題解答（FAQ）：聯絡方式（網站、Email、電話）、產品購買流程、售後服務、客製化服務、支援語言（繁體中文、簡體中文、英文、日文）、公司地址。涵蓋客戶最關心的 6 大問題與詳細解答。",
+      "keywords": [
+        "常見問題",
+        "FAQ",
+        "聯絡方式",
+        "購買",
+        "售後服務",
+        "客製化",
+        "語言支援",
+        "公司地址"
+      ],
+      "size_bytes": 702,
+      "line_count": 22
+    }
+  ]
+}

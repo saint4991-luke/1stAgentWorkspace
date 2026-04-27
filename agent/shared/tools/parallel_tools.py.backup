@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+"""
+🦐 蝦米 Agent Parallel Tools - 並行 Tool 執行模組
+
+支持多個工具並行執行，提升性能。
+"""
+
+import asyncio
+import json
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, Any, List, Callable
+from datetime import datetime
+
+
+class ParallelToolExecutor:
+    """並行 Tool 執行器"""
+    
+    def __init__(self, tool_functions: Dict[str, Callable], max_workers: int = 5):
+        """
+        初始化執行器
+        
+        Args:
+            tool_functions: 工具函數映射 {name: function}
+            max_workers: 最大並行 worker 數
+        """
+        self.tool_functions = tool_functions
+        self.max_workers = max_workers
+        self.executor = ThreadPoolExecutor(max_workers=max_workers)
+    
+    async def execute_parallel(self, tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        並行執行多個工具
+        
+        Args:
+            tool_calls: Tool Call 列表
+                [{"name": "...", "arguments": "...", "id": "..."}]
+        
+        Returns:
+            List[Dict]: 執行結果列表
+        """
+        if not tool_calls:
+            return []
+        
+        # 創建執行任務
+        tasks = []
+        for tc in tool_calls:
+            task = asyncio.create_task(
+                self._execute_single(tc["name"], tc["arguments"], tc["id"])
+            )
+            tasks.append(task)
+        
+        # 等待所有任務完成
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # 處理結果
+        processed_results = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                processed_results.append({
+                    "id": tool_calls[i]["id"],
+                    "name": tool_calls[i]["name"],
+                    "error": str(result),
+                    "success": False
+                })
+            else:
+                processed_results.append({
+                    "id": tool_calls[i]["id"],
+                    "name": tool_calls[i]["name"],
+                    "result": result,
+                    "success": True
+                })
+        
+        return processed_results
+    
+    async def _execute_single(self, name: str, arguments: str, tool_call_id: str) -> Dict[str, Any]:
+        """
+        執行單個工具（異步包裝）
+        
+        Args:
+            name: 工具名稱
+            arguments: 工具參數 (JSON 字串)
+            tool_call_id: Tool Call ID
+        
+        Returns:
+            Dict: 執行結果
+        """
+        loop = asyncio.get_event_loop()
+        
+        # 解析參數
+        try:
+            args_dict = json.loads(arguments) if arguments else {}
+        except json.JSONDecodeError as e:
+            raise ValueError(f"參數解析失敗：{e}")
+        
+        # 檢查工具是否存在
+        if name not in self.tool_functions:
+            raise ValueError(f"工具不存在：{name}")
+        
+        # 在線程池中執行同步函數
+        func = self.tool_functions[name]
+        
+        # 處理異步函數
+        if asyncio.iscoroutinefunction(func):
+            result = await func(**args_dict)
+        else:
+            # 同步函數，在線程池中執行
+            result = await loop.run_in_executor(
+                self.executor,
+                lambda: func(**args_dict)
+            )
+        
+        return {
+            "id": tool_call_id,
+            "name": name,
+            "result": result
+        }
+    
+    def shutdown(self):
+        """關閉執行器"""
+        self.executor.shutdown(wait=True)
+
+
+async def execute_tools_parallel(
+    tool_calls: List[Dict[str, Any]],
+    tool_functions: Dict[str, Callable],
+    max_workers: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    並行執行多個工具（便捷函數）
+    
+    Args:
+        tool_calls: Tool Call 列表
+        tool_functions: 工具函數映射
+        max_workers: 最大並行 worker 數
+    
+    Returns:
+        List[Dict]: 執行結果列表
+    """
+    executor = ParallelToolExecutor(tool_functions, max_workers)
+    try:
+        return await executor.execute_parallel(tool_calls)
+    finally:
+        executor.shutdown()
+
+
+# ============= 測試 =============
+if __name__ == "__main__":
+    import time
+    
+    # 模擬慢速工具
+    def slow_tool(delay: float, result: str = "OK"):
+        time.sleep(delay)
+        return result
+    
+    async def test_parallel():
+        tool_functions = {
+            "slow1": lambda **kw: slow_tool(1.0, "結果 1"),
+            "slow2": lambda **kw: slow_tool(1.0, "結果 2"),
+            "slow3": lambda **kw: slow_tool(1.0, "結果 3"),
+        }
+        
+        tool_calls = [
+            {"name": "slow1", "arguments": '{"delay": 1.0, "result": "結果 1"}', "id": "1"},
+            {"name": "slow2", "arguments": '{"delay": 1.0, "result": "結果 2"}', "id": "2"},
+            {"name": "slow3", "arguments": '{"delay": 1.0, "result": "結果 3"}', "id": "3"},
+        ]
+        
+        # 串行執行
+        print("串行執行測試:")
+        start = time.time()
+        serial_results = []
+        for tc in tool_calls:
+            result = tool_functions[tc["name"]](**json.loads(tc["arguments"]))
+            serial_results.append({"name": tc["name"], "result": result})
+        serial_time = time.time() - start
+        print(f"  時間：{serial_time:.2f}秒")
+        
+        # 並行執行
+        print("\n並行執行測試:")
+        start = time.time()
+        parallel_results = await execute_tools_parallel(tool_calls, tool_functions)
+        parallel_time = time.time() - start
+        print(f"  時間：{parallel_time:.2f}秒")
+        
+        # 性能對比
+        improvement = ((serial_time - parallel_time) / serial_time) * 100
+        print(f"\n性能改善：{improvement:.1f}%")
+        
+        print("\n✅ ParallelToolExecutor 測試完成")
+    
+    asyncio.run(test_parallel())

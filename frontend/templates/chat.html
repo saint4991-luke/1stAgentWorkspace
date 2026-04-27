@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💬 一般對話 - 蝦米 Agent</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- 左側邊欄 -->
+    <div id="sidebar">
+        <!-- Session 列表 -->
+        <div id="session-panel">
+            <div id="session-header">
+                💬 一般對話
+            </div>
+            
+            <button id="new-session-btn" onclick="createNewSession()" style="width:100%;margin:15px;padding:10px;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);border:none;border-radius:6px;color:white;cursor:pointer;font-size:14px;font-weight:600;transition:background 0.2s;" title="新增對話">➕ 新增對話</button>
+            <div id="session-list">
+                <div class="empty-state">
+                    <div class="empty-state-icon">💭</div>
+                    <div>載入中...</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 檔案總管 -->
+        <div id="file-manager">
+            <div id="file-header">
+                📁 檔案總管
+                <button id="refresh-btn" onclick="loadFiles(currentPath)" title="刷新">🔄</button>
+            </div>
+            <div class="breadcrumb" id="breadcrumb">📍 /workspace</div>
+            <div id="file-list"></div>
+            <div id="upload-area">
+                <button id="upload-btn" onclick="document.getElementById('file-input').click()">⬆️ 上傳檔案</button>
+                <input id="file-input" type="file" onchange="uploadFile(this)">
+            </div>
+        </div>
+    </div>
+    
+    <!-- 右側：聊天區域 -->
+    <div id="main">
+        <div id="chat-container">
+            <div id="chat">
+                <div class="message shrimp">
+                    🦐 你好！這是 **一般對話** 頁面
+                    <br><br>
+                    💡 我可以幫你：
+                    <br>• 讀取 Excel、Word、PDF 等文件
+                    <br>• 搜尋網頁資訊
+                    <br>• 整理和分析資料
+                    <br>• 管理你的檔案
+                    <br><br>
+                    🚀 開始聊天吧！
+                </div>
+            </div>
+            <div id="input-area">
+                <input id="input" placeholder="輸入訊息... (Shift+Enter 換行)" onkeypress="handleKeyPress(event)">
+                <button id="send-btn" onclick="send()">發送</button>
+            </div>
+        </div>
+        <div id="status-bar">
+            <span id="status-path">📁 /workspace</span>
+            <span id="status-session">💬 未選擇 Session</span>
+            <span id="status-connection">🟢 已連線</span>
+            <span id="status-timestamp"></span>
+        </div>
+    </div>
+    
+    <!-- 預覽 Modal -->
+    <div id="preview">
+        <div id="preview-content">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <span id="preview-title" style="font-size:18px;font-weight:600;">📄 檔案預覽</span>
+                <span id="preview-close" onclick="closePreview()">&times;</span>
+            </div>
+            <div id="preview-body"></div>
+        </div>
+    </div>
+    
+    <script src="/static/js/chat.js"></script>
+</body>
+</html>
