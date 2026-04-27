@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 測試文件
+test_*.py
+*_test.py
+tests/
+
+# 文檔
+*.md
+!requirements.txt
+!Dockerfile
+!README*.md
+
+# 環境變數
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# 腳本
+start_api.sh
+
+# 其他
+*.log
+.DS_Store
+Thumbs.db

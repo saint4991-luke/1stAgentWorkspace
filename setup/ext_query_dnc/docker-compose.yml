@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  ext_query_dnc:
+    image: ext_query_dnc:0.0.6
+    container_name: ext_query_dnc
+    volumes:
+      - ./logs:/app/shared/logs
+      - ${telsurvey_settings}/prompts:/app/shared/prompts
+    ports:
+      - "${HOST_API_PORT:-22001}:${CONTAINER_API_PORT:-22001}"
+    env_file:
+      - .env
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:22001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    command:
+      - /bin/bash
+      - -c
+      - |
+        python retrieval_agent.py \
+          --host 0.0.0.0 \
+          --port ${CONTAINER_API_PORT}
+
+# 可選：如果需要本地 Qdrant 進行測試
+# qdrant:
+#   image: qdrant/qdrant:latest
+#   ports:
+#     - "6333:6333"
+#     - "6334:6334"
+#   volumes:
+#     - qdrant-data:/qdrant/storage
