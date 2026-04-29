@@ -14,6 +14,7 @@ API 端點：
 import os
 import sys
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 # 添加父目錄到 Python 路徑，以便導入 session 模組
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -46,13 +47,6 @@ try:
 except ImportError as e:
     print(f"⚠️ 警告：無法導入 ext_query 模組：{e}")
     EXT_QUERY_AVAILABLE = False
-
-# 初始化 FastAPI 應用
-app = FastAPI(
-    title="ExtQuery Bridge",
-    description="Session + ext_query 整合服務 - 電話號碼查詢系統",
-    version="1.0.0"
-)
 
 # 全局變數
 store: Optional[SessionStore] = None
@@ -90,10 +84,28 @@ def initialize_modules():
             final_agent = None
 
 
-@app.on_event("startup")
-async def startup_event():
-    """應用啟動時初始化模組"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan 事件處理器（替代 @app.on_event("startup")）
+    
+    FastAPI 推薦的方式：https://fastapi.tiangolo.com/advanced/events/
+    """
+    # 啟動時執行
+    print("🦐 ExtQuery Bridge 啟動中...")
     initialize_modules()
+    yield
+    # 關閉時執行（清理資源）
+    print("👋 ExtQuery Bridge 關閉中...")
+
+
+# 初始化 FastAPI 應用
+app = FastAPI(
+    title="ExtQuery Bridge",
+    description="Session + ext_query 整合服務 - 電話號碼查詢系統",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 
 @app.get("/health")
