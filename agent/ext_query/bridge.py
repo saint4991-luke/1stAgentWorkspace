@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from typing import Optional, Dict, Any
 import json
+import time
 
 # 環境變數配置
 SESSION_DB_PATH = os.getenv("SESSION_DB_PATH", "/data/sessions.db")
@@ -196,6 +197,13 @@ async def query_endpoint(request: Request):
     # 5. ext_query 判斷流程
     async def event_generator():
         full_answer = ""
+        start_time = time.time()
+        
+        # 獲取時間戳（請求開始時）- 用於所有事件
+        created = int(time.time())
+        
+        # 生成事件 ID: {session_id}_{created}
+        event_id = f"{session_id}_{created}"
         
         try:
             # Step A: 判斷是否需要查詢
@@ -206,11 +214,6 @@ async def query_endpoint(request: Request):
                 # 需要查詢 → 呼叫資料庫
                 print(f"🔍 [Session: {session_id}] 需要查詢：{keywords}")
                 
-                yield {
-                    "event": "status",
-                    "data": json.dumps({"status": "searching", "message": f"正在搜尋：{display}"}, ensure_ascii=False)
-                }
-                
                 # Step B: 搜尋資料庫
                 results = await retrieval_agent.search_by_keywords(keywords)
                 print(f"📊 [Session: {session_id}] 找到 {len(results)} 筆結果")
@@ -220,22 +223,34 @@ async def query_endpoint(request: Request):
                     if chunk == "[DONE]":
                         break
                     full_answer += chunk
+                    
+                    # SSE 格式：text_chunk（扁平結構）
                     yield {
                         "event": "text_chunk",
-                        "data": json.dumps({"text": chunk}, ensure_ascii=False)
+                        "data": json.dumps({
+                            "event": "text_chunk",
+                            "message": chunk,
+                            "created": created,
+                            "id": event_id
+                        }, ensure_ascii=False, separators=(',', ':'))
                     }
             else:
                 # 不需要查詢 → 直接對話
                 print(f"💬 [Session: {session_id}] 不需要查詢，直接對話")
                 
                 # 使用 Final Agent 生成一般對話回答
-                # 注意：這裡可以根據需求調整 prompt
                 answer = "請問您想查詢什麼電話號碼或聯絡人嗎？"
                 full_answer = answer
                 
+                # SSE 格式：text_chunk
                 yield {
                     "event": "text_chunk",
-                    "data": json.dumps({"text": answer}, ensure_ascii=False)
+                    "data": json.dumps({
+                        "event": "text_chunk",
+                        "message": answer,
+                        "created": created,
+                        "id": event_id
+                    }, ensure_ascii=False, separators=(',', ':'))
                 }
             
             # Step D: 記錄系統回答
@@ -243,22 +258,48 @@ async def query_endpoint(request: Request):
                 store.add_message(session_id, role="assistant", content=full_answer)
                 print(f"💬 [Session: {session_id}] Assistant: {full_answer[:50]}...")
             
-            # Step E: 完成
+            # 計算計時數據
+            end_time = time.time()
+            timing = {
+                "total_ms": int((end_time - start_time) * 1000)
+            }
+            
+            # Step E: 完成（SSE 格式：done）
             yield {
                 "event": "done",
                 "data": json.dumps({
-                    "session_id": session_id,
-                    "answer_length": len(full_answer)
-                }, ensure_ascii=False)
+                    "event": "done",
+                    "created": created,
+                    "id": event_id,
+                    "timing": timing
+                }, ensure_ascii=False, separators=(',', ':'))
+            }
+            
+            # Step F: [DONE] 標記（規範要求）
+            yield {
+                "event": "done",
+                "data": "[DONE]"
             }
             
         except Exception as e:
             print(f"❌ [Session: {session_id}] 錯誤：{e}")
             error_message = str(e)
             
+            # SSE 格式：error
             yield {
                 "event": "error",
-                "data": json.dumps({"error": error_message}, ensure_ascii=False)
+                "data": json.dumps({
+                    "event": "error",
+                    "error": error_message,
+                    "created": created,
+                    "id": event_id
+                }, ensure_ascii=False, separators=(',', ':'))
+            }
+            
+            # Step F: [DONE] 標記（錯誤情況）
+            yield {
+                "event": "error",
+                "data": "[DONE]"
             }
             
             # 記錄錯誤到 Session
