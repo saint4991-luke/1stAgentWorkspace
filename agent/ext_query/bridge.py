@@ -139,7 +139,6 @@ async def query_endpoint(request: Request):
     - Body: {"query": "用戶問題"}
     
     回應：SSE 串流
-    - event: status - 狀態訊息（例如：正在搜尋）
     - event: text_chunk - 回答內容片段
     - event: done - 完成
     - event: error - 錯誤
@@ -213,6 +212,18 @@ async def query_endpoint(request: Request):
             if keywords:
                 # 需要查詢 → 呼叫資料庫
                 print(f"🔍 [Session: {session_id}] 需要查詢：{keywords}")
+                
+                # 發送 display 訊息（如果有的話）
+                if display:
+                    yield {
+                        "event": "text_chunk",
+                        "data": json.dumps({
+                            "event": "text_chunk",
+                            "message": display,
+                            "created": created,
+                            "id": event_id
+                        }, ensure_ascii=False, separators=(',', ':'))
+                    }
                 
                 # Step B: 搜尋資料庫
                 results = await retrieval_agent.search_by_keywords(keywords)
