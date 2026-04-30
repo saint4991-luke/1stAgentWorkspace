@@ -224,11 +224,6 @@ async def query_endpoint(request: Request):
             if keywords:
                 # 需要查詢 → 呼叫資料庫
                 print(f"🔍 [Session: {session_id}] 需要查詢：{keywords}")
-                if display:
-                    yield {
-                        "event": "text_chunk",
-                        "data": json.dumps({"event": "text_chunk", "message": display}, ensure_ascii=False)
-                    }
                 
                 # 發送 display 訊息（如果有的話）
                 if display:
