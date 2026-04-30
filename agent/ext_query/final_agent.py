@@ -13,7 +13,7 @@ from typing import List, Dict, Any, Optional, AsyncGenerator
 from pathlib import Path
 
 # 環境變數配置
-PROMPT_FILE = Path(__file__).parent / "shared" / "prompts" / "ext_final_agent_prompt.txt"
+PROMPT_FILE = Path(__file__).parent.parent / "shared" / "prompts" / "ext_final_agent_prompt.txt"
 UBIGPT_FQDN = os.getenv("UBIGPT_FQDN", "https://g.ubitus.ai/v1/chat/completions")
 UBIGPT_AUTH_KEY = os.getenv("UBIGPT_AUTH_KEY", "Bearer +5/tIEiUce9skGhe+mPt6AjL7TPY2kAvKNzvcilblHc73FAndMfH5EICwOSHPLbB3qN85eGTFlEGwJBItrQVcg==")
 UBIGPT_MODEL = os.getenv("UBIGPT_MODEL", "llama-4-maverick-fp8")

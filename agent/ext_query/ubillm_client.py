@@ -18,7 +18,7 @@ from pathlib import Path
 
 
 # 環境變數配置
-PROMPT_FILE = Path(__file__).parent / "shared" / "prompts" / "ext_ubillm_client_prompt.txt"
+PROMPT_FILE = Path(__file__).parent.parent / "shared" / "prompts" / "ext_ubillm_client_prompt.txt"
 UBILM_GRANT_URL = os.getenv("UBILM_GRANT_URL", "https://sage-stg.ubitus.ai/ubillm/api/v1/resource/grant")
 UBILM_API_KEY = os.getenv("UBILM_API_KEY", "QZ8NinKF8TNfRucRmdEmfcZVqs28mEKeXbV44fI0cig")
 UBILM_MODEL = os.getenv("UBILM_LLM_MODEL", "qwen3-8b-fp8")
