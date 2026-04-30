@@ -125,7 +125,8 @@ class uBillmClient:
 # 便捷函數
 async def call_ubillm(
     model: str = "qwen3-8b-fp8",
-    messages: Optional[List[Dict[str, str]]] = None,
+    user_messages: Optional[List[str]] = None,
+    assistant_messages: Optional[List[str]] = None,
     enable_thinking: bool = False,
     temperature: float = 0,
     api_key: Optional[str] = None,
@@ -133,17 +134,38 @@ async def call_ubillm(
 ) -> Dict[str, Any]:
     """
     便捷函數：呼叫 uBillm LLM API（電話號碼資料庫查詢）
-    自動加入 system prompt，使用者只需提供 user message
+    自動加入 system prompt，並交錯組合 user 和 assistant 的對話歷史
+    
+    參數：
+        user_messages: 用戶訊息列表 ["訊息 1", "訊息 2", ...]
+        assistant_messages: 助手回應列表 ["回應 1", "回應 2", ...]
+    
+    內部會自動組合成：
+        [
+            {"role": "user", "content": user_message1},
+            {"role": "assistant", "content": assistant_message1},
+            {"role": "user", "content": user_message2},
+            ...
+        ]
     """
     client = uBillmClient(api_key=api_key)
     
-    if messages is None:
-        messages = []
+    # 交錯組合 user 和 assistant 的訊息
+    messages = []
+    user_msgs = user_messages or []
+    assistant_msgs = assistant_messages or []
+    
+    # 交錯組合（user, assistant, user, assistant, ...）
+    for i, user_msg in enumerate(user_msgs):
+        messages.append({"role": "user", "content": user_msg})
+        if i < len(assistant_msgs):
+            messages.append({"role": "assistant", "content": assistant_msgs[i]})
     
     # 自動加入 system prompt（如果還沒有）
     has_system = any(msg.get("role") == "system" for msg in messages)
     if not has_system:
         messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
+    
     print(f"call_ubillm {messages=} ")
     return await client.call(
         model=UBILM_MODEL,
@@ -190,12 +212,19 @@ async def telsurvey_inputparser(request: InputParserRequest):
 if __name__ == "__main__":
     import asyncio
     async def test():
-        print("=== 電話號碼查詢測試 ===")
+        print("=== 電話號碼查詢測試（單一訊息）===")
         response = await call_ubillm(
             model=UBILM_MODEL,
-            messages=[
-                {"role": "user", "content": "消基會會長的內線分機"}
-            ],
+            user_messages=["消基會會長的內線分機"],
+            enable_thinking=False
+        )
+        print(response["choices"][0]["message"]["content"])
+        
+        print("\n=== 電話號碼查詢測試（多輪對話）===")
+        response = await call_ubillm(
+            model=UBILM_MODEL,
+            user_messages=["遠藤和也的電話號碼是？", "那個部門是什麼？"],
+            assistant_messages=["遠藤和也の内線番号は 1121 です。"],
             enable_thinking=False
         )
         print(response["choices"][0]["message"]["content"])

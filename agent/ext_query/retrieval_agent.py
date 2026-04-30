@@ -90,22 +90,30 @@ class RetrievalAgent:
                 displayStr = tool_display.get("y", "")
         return keywords, displayStr
     
-    async def extract_keywords_from_query(self, user_query: str) -> Tuple[List[str], str]:
+    async def extract_keywords_from_query(self, user_query: str, conversation_history: Dict[str, List[str]] = None) -> Tuple[List[str], str]:
         """
         Step 1: 呼叫 uBillm 解析用戶意圖，提取關鍵字
         
         Args:
             user_query: 用戶查詢（例如："我要找公共安全組的高島"）
+            conversation_history: 對話歷史 {"user": [...], "assistant": [...]}
         
         Returns:
             關鍵字列表
         """
         print("Step 1: 解析用戶意圖...")
+        
+        # 準備對話歷史
+        user_messages = conversation_history.get("user", []) if conversation_history else []
+        assistant_messages = conversation_history.get("assistant", []) if conversation_history else []
+        
+        # 加入當前查詢
+        user_messages = user_messages + [user_query]
+        
         ubillm_response = await call_ubillm(
             model=self.ubillm_model,
-            messages=[
-                {"role": "user", "content": user_query}
-            ],
+            user_messages=user_messages,
+            assistant_messages=assistant_messages,
             enable_thinking=False
         )
         
@@ -125,10 +133,18 @@ class RetrievalAgent:
         print(f"{keywords=} {dispalyStr=}")
         return keywords,dispalyStr
 
-    async def extract_keywords_from_query_gen(self, user_query: str) -> AsyncGenerator[dict, None]:
+    async def extract_keywords_from_query_gen(self, user_query: str, conversation_history: Dict[str, List[str]] = None) -> AsyncGenerator[dict, None]:
+        # 準備對話歷史
+        user_messages = conversation_history.get("user", []) if conversation_history else []
+        assistant_messages = conversation_history.get("assistant", []) if conversation_history else []
+        
+        # 加入當前查詢
+        user_messages = user_messages + [user_query]
+        
         ubillm_response = await call_ubillm(
             model=self.ubillm_model,
-            messages=[{"role": "user", "content": user_query}],
+            user_messages=user_messages,
+            assistant_messages=assistant_messages,
             enable_thinking=False
         )
         

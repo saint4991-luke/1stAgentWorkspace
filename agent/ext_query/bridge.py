@@ -205,9 +205,21 @@ async def query_endpoint(request: Request):
         event_id = f"{session_id}_{created}"
         
         try:
-            # Step A: 判斷是否需要查詢
+            # 獲取對話歷史（用於判斷是否需要檢索）
+            messages = store.get_messages(session_id)
+            conversation_history = {"user": [], "assistant": []}
+            for msg in messages:
+                if msg["role"] == "user":
+                    conversation_history["user"].append(msg["content"])
+                elif msg["role"] == "assistant":
+                    conversation_history["assistant"].append(msg["content"])
+            
+            # Step A: 判斷是否需要查詢（傳入對話歷史）
             print(f"🔍 [Session: {session_id}] 判斷意圖...")
-            keywords, display = await retrieval_agent.extract_keywords_from_query(user_query)
+            keywords, display = await retrieval_agent.extract_keywords_from_query(
+                user_query, 
+                conversation_history=conversation_history
+            )
             
             if keywords:
                 # 需要查詢 → 呼叫資料庫
