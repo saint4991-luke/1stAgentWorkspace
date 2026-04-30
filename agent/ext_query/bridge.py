@@ -182,7 +182,7 @@ async def query_endpoint(request: Request):
     # 3. 獲取用戶問題
     try:
         data = await request.json()
-        user_query = data.get("query", "")
+        user_query = data.get("input", "")
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
     
