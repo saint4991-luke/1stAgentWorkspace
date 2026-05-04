@@ -28,7 +28,6 @@ import time
 
 # 環境變數配置
 SESSION_DB_PATH = os.getenv("SESSION_DB_PATH", "/data/sessions.db")
-USER_ID_HEADER = os.getenv("USER_ID_HEADER", "X-User-ID")
 BRIDGE_HOST = os.getenv("BRIDGE_HOST", "0.0.0.0")
 BRIDGE_PORT = int(os.getenv("BRIDGE_PORT", "3006"))
 
@@ -193,9 +192,6 @@ async def query_endpoint(request: Request):
         # 獲取時間戳（請求開始時）- 用於所有事件
         created = int(time.time())
         
-        # 生成事件 ID: {session_id}_{created}
-        event_id = f"{session_id}_{created}"
-        
         try:
             # 獲取對話歷史（用於判斷是否需要檢索）
             messages = store.get_messages(session_id)
@@ -219,7 +215,7 @@ async def query_endpoint(request: Request):
                 
                 # 發送 display 訊息（如果有的話）
                 if display:
-                    yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': display, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
+                    yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': display, 'created': created, 'id': session_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
                 
                 # Step B: 搜尋資料庫
                 results = await retrieval_agent.search_by_keywords(keywords)
@@ -232,7 +228,7 @@ async def query_endpoint(request: Request):
                     full_answer += chunk
                     
                     # SSE 格式：text_chunk（扁平結構）
-                    yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': chunk, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
+                    yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': chunk, 'created': created, 'id': session_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
             else:
                 # 不需要查詢 → 使用 display 作為回應（ignore_retrieve 的情況）
                 print(f"💬 [Session: {session_id}] 不需要查詢，使用 ignore_retrieve")
@@ -241,16 +237,16 @@ async def query_endpoint(request: Request):
                 if display:
                     answer = display
                 else:
-                    answer = "請問您想查詢什麼電話號碼或聯絡人嗎？"
+                    answer = "どちらの担当者にご連絡されますか？"
                 full_answer = answer
                 
                 # SSE 格式：text_chunk
-                yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': answer, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
+                yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': answer, 'created': created, 'id': session_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
             
             # Step D: 記錄系統回答
             if full_answer:
                 store.add_message(session_id, role="assistant", content=full_answer)
-                print(f"💬 [Session: {session_id}] Assistant: {full_answer[:50]}...")
+                print(f"💬 [Session: {session_id}] Assistant: {full_answer=}")
             
             # 計算計時數據
             end_time = time.time()
@@ -259,7 +255,7 @@ async def query_endpoint(request: Request):
             }
             
             # Step E: 完成（SSE 格式：done）
-            yield f"event: done\ndata: {json.dumps({'event': 'done', 'created': created, 'id': event_id, 'timing': timing}, ensure_ascii=False, separators=(',', ':'))}\n\n"
+            yield f"event: done\ndata: {json.dumps({'event': 'done', 'created': created, 'id': session_id, 'timing': timing}, ensure_ascii=False, separators=(',', ':'))}\n\n"
             
             # Step F: [DONE] 標記（規範要求）
             yield "data: [DONE]\n\n"
@@ -269,7 +265,7 @@ async def query_endpoint(request: Request):
             error_message = str(e)
             
             # SSE 格式：error
-            yield f"event: error\ndata: {json.dumps({'event': 'error', 'error': error_message, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
+            yield f"event: error\ndata: {json.dumps({'event': 'error', 'error': error_message, 'created': created, 'id': session_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
             
             # Step F: [DONE] 標記（錯誤情況）
             yield "data: [DONE]\n\n"
@@ -387,7 +383,6 @@ if __name__ == "__main__":
     print(f"📍 Host: {BRIDGE_HOST}")
     print(f"🔌 Port: {BRIDGE_PORT}")
     print(f"💾 Session DB: {SESSION_DB_PATH}")
-    print(f"🔑 User ID Header: {USER_ID_HEADER}")
     print("=" * 60)
     
     uvicorn.run(
