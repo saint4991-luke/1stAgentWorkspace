@@ -96,19 +96,16 @@ class RetrievalAgent:
         
         Args:
             user_query: 用戶查詢（例如："我要找公共安全組的高島"）
-            conversation_history: 對話歷史 {"user": [...], "assistant": [...]}
+            conversation_history: 對話歷史 {"user": [...], "assistant": [...]}（已包含當前查詢）
         
         Returns:
             關鍵字列表
         """
         print("Step 1: 解析用戶意圖...")
         
-        # 準備對話歷史
+        # 準備對話歷史（bridge.py 已經將當前 user_query 添加到 conversation_history 中）
         user_messages = conversation_history.get("user", []) if conversation_history else []
         assistant_messages = conversation_history.get("assistant", []) if conversation_history else []
-        
-        # 加入當前查詢
-        user_messages = user_messages + [user_query]
         
         ubillm_response = await call_ubillm(
             model=self.ubillm_model,
@@ -134,12 +131,9 @@ class RetrievalAgent:
         return keywords,dispalyStr
 
     async def extract_keywords_from_query_gen(self, user_query: str, conversation_history: Dict[str, List[str]] = None) -> AsyncGenerator[dict, None]:
-        # 準備對話歷史
+        # 準備對話歷史（bridge.py 已經將當前 user_query 添加到 conversation_history 中）
         user_messages = conversation_history.get("user", []) if conversation_history else []
         assistant_messages = conversation_history.get("assistant", []) if conversation_history else []
-        
-        # 加入當前查詢
-        user_messages = user_messages + [user_query]
         
         ubillm_response = await call_ubillm(
             model=self.ubillm_model,
