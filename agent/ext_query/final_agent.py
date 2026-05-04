@@ -9,7 +9,7 @@ import os
 import json
 import re
 
-from typing import List, Dict, Any, Optional, AsyncGenerator
+from typing import List, Dict, Any, Optional, AsyncGenerator, Union
 from pathlib import Path
 
 # 環境變數配置
@@ -141,25 +141,57 @@ class FinalAgent:
     async def generate_answer_stream(
         self,
         user_question: str,
-        search_results: List[Dict[str, Any]]
+        search_results: Union[List[Dict[str, Any]], Dict]
     ) -> AsyncGenerator[str, None]:
         print(f"3. generate_answer_stream \n")
-        formatted_results = self.format_search_results(search_results)
-        #print(f"generate_answer_stream {formatted_results=}\n")
         
-        system_prompt = SYSTEM_PROMPT
-        system_prompt.replace("{question}", user_question)
-        #print(f"generate_answer_stream {system_prompt=}\n")
-        
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": self.auth_key
-        }
-        
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"ユーザーの質問：{user_question}\n\n検索結果：\n{formatted_results}\n\n上記の情報に基づいて、最終的な回答を生成してください。"}
-        ]
+        # 判斷模式：ignore_retrieve 或正常搜尋
+        if isinstance(search_results, dict) and search_results.get("ignore_retrieve"):
+            # ignore_retrieve 模式：使用對話歷史
+            print("📖 [Final Agent] ignore_retrieve 模式，使用對話歷史")
+            conversation_history = search_results.get("conversation_history", {})
+            
+            # 格式化對話歷史
+            history_text = ""
+            user_msgs = conversation_history.get("user", [])
+            assistant_msgs = conversation_history.get("assistant", [])
+            for user_msg, assistant_msg in zip(user_msgs, assistant_msgs):
+                history_text += f"User: {user_msg}\nAssistant: {assistant_msg}\n"
+            
+            system_prompt = SYSTEM_PROMPT
+            system_prompt.replace("{question}", user_question)
+            
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": self.auth_key
+            }
+            
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"""ユーザーの質問：{user_question}
+
+会話履歴：
+{history_text}
+
+上記の会話履歴から答えを抽出して、ユーザーの質問に直接回答してください。"""}
+            ]
+        else:
+            # 正常模式：使用搜尋結果
+            print("🔍 [Final Agent] 正常模式，使用搜尋結果")
+            formatted_results = self.format_search_results(search_results)
+            
+            system_prompt = SYSTEM_PROMPT
+            system_prompt.replace("{question}", user_question)
+            
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": self.auth_key
+            }
+            
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"ユーザーの質問：{user_question}\n\n検索結果：\n{formatted_results}\n\n上記の情報に基づいて、最終的な回答を生成してください。"}
+            ]
 
         payload = {
             "model": self.model,

@@ -208,18 +208,36 @@ async def query_endpoint(request: Request):
             
             # Step A: 判斷是否需要查詢（傳入對話歷史）
             print(f"🔍 [Session: {session_id}] 判斷意圖...")
-            keywords, display = await retrieval_agent.extract_keywords_from_query(
+            keywords, display, is_ignore = await retrieval_agent.extract_keywords_from_query(
                 user_query, 
                 conversation_history=conversation_history
             )
             
-            if keywords:
+            # 先回 display（等待中訊息）- 兩者都需要
+            if display:
+                yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': display, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
+            
+            if is_ignore:
+                # 跳過 search，直接交給 Final Agent + 對話歷史
+                print(f"💬 [Session: {session_id}] ignore_retrieve，交給 Final Agent 處理對話歷史")
+                
+                # 將對話歷史作為「結果」傳給 Final Agent
+                results = {
+                    "ignore_retrieve": True,
+                    "conversation_history": conversation_history
+                }
+                
+                async for chunk in final_agent.generate_answer_stream(user_query, results):
+                    if chunk == "[DONE]":
+                        break
+                    full_answer += chunk
+                    
+                    # SSE 格式：text_chunk（扁平結構）
+                    yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': chunk, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
+                    
+            elif keywords:
                 # 需要查詢 → 呼叫資料庫
                 print(f"🔍 [Session: {session_id}] 需要查詢：{keywords}")
-                
-                # 發送 display 訊息（如果有的話）
-                if display:
-                    yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': display, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
                 
                 # Step B: 搜尋資料庫
                 results = await retrieval_agent.search_by_keywords(keywords)
@@ -233,19 +251,6 @@ async def query_endpoint(request: Request):
                     
                     # SSE 格式：text_chunk（扁平結構）
                     yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': chunk, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
-            else:
-                # 不需要查詢 → 使用 display 作為回應（ignore_retrieve 的情況）
-                print(f"💬 [Session: {session_id}] 不需要查詢，使用 ignore_retrieve")
-                
-                # 使用 display 作為回應（LLM 已經判斷答案在對話歷史中）
-                if display:
-                    answer = display
-                else:
-                    answer = "請問您想查詢什麼電話號碼或聯絡人嗎？"
-                full_answer = answer
-                
-                # SSE 格式：text_chunk
-                yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': answer, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
             
             # Step D: 記錄系統回答
             if full_answer:
