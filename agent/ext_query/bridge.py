@@ -150,15 +150,7 @@ async def query_endpoint(request: Request):
     if not EXT_QUERY_AVAILABLE or not retrieval_agent or not final_agent:
         raise HTTPException(status_code=503, detail="ext_query module not available")
     
-    # 1. 用戶識別
-    user_id = request.headers.get(USER_ID_HEADER)
-    if not user_id:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Missing {USER_ID_HEADER} header"
-        )
-    
-    # 2. Session 管理（檢查是否為連續對話）
+    # 1. Session 管理（檢查是否為連續對話）
     session_id = request.cookies.get("session_id")
     session = None
     
@@ -171,13 +163,13 @@ async def query_endpoint(request: Request):
     if not session_id:
         session_data = store.create_session(
             prefix="EXT",
-            metadata={"user_id": user_id},
+            metadata={},
             ttl_hours=24
         )
         session_id = session_data['session_id']
-        print(f"🆕 創建新 Session: {session_id} (user: {user_id})")
+        print(f"🆕 創建新 Session: {session_id}")
     else:
-        print(f"🔄 使用現有 Session: {session_id} (user: {user_id})")
+        print(f"🔄 使用現有 Session: {session_id}")
     
     # 3. 獲取用戶問題
     try:
