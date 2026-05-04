@@ -76,21 +76,38 @@ class RetrievalAgent:
             print(f"JSON 解析失敗：{e}")
             return []
     
-    def extract_keywords(self, tool_calls: List[Dict[str, Any]]) -> Tuple[List[str], str]:
-        """從工具調用中提取關鍵字"""
+    def extract_keywords(self, tool_calls: List[Dict[str, Any]]) -> Tuple[List[str], str, bool]:
+        """從工具調用中提取關鍵字
+        
+        Returns:
+            keywords: 關鍵字列表（retrieve_from_text 時有值）
+            displayStr: 顯示訊息（兩者都有）
+            is_ignore_retrieve: 是否為 ignore_retrieve 模式
+        """
         keywords = []
         displayStr = ""
+        is_ignore = False
+        
         for call in tool_calls:
-            if call.get("tool") == "retrieve_from_text":
+            tool = call.get("tool")
+            
+            if tool == "retrieve_from_text":
                 tool_input = call.get("tool_input", {})
                 query = tool_input.get("x", "")
                 if query:
                     keywords.append(query)
                 tool_display = call.get("tool_display", {})
                 displayStr = tool_display.get("y", "")
-        return keywords, displayStr
+                
+            elif tool == "ignore_retrieve":
+                is_ignore = True
+                tool_display = call.get("tool_display", {})
+                displayStr = tool_display.get("y", "")
+                # 不提取 keywords，保持空列表
+        
+        return keywords, displayStr, is_ignore
     
-    async def extract_keywords_from_query(self, user_query: str, conversation_history: Dict[str, List[str]] = None) -> Tuple[List[str], str]:
+    async def extract_keywords_from_query(self, user_query: str, conversation_history: Dict[str, List[str]] = None) -> Tuple[List[str], str, bool]:
         """
         Step 1: 呼叫 uBillm 解析用戶意圖，提取關鍵字
         
@@ -99,7 +116,9 @@ class RetrievalAgent:
             conversation_history: 對話歷史 {"user": [...], "assistant": [...]}（已包含當前查詢）
         
         Returns:
-            關鍵字列表
+            keywords: 關鍵字列表
+            display: 顯示訊息
+            is_ignore: 是否為 ignore_retrieve 模式
         """
         print("Step 1: 解析用戶意圖...")
         
@@ -120,15 +139,15 @@ class RetrievalAgent:
         # 解析 JSON
         tool_calls = self.parse_ubillm_response(content)
         if not tool_calls:
-            return [], None
+            return [], None, False
         
         # 提取關鍵字
-        keywords, dispalyStr = self.extract_keywords(tool_calls)
-        if not keywords:
-            return [],dispalyStr
+        keywords, displayStr, is_ignore = self.extract_keywords(tool_calls)
+        if not keywords and not is_ignore:
+            return [], displayStr, False
         
-        print(f"{keywords=} {dispalyStr=}")
-        return keywords,dispalyStr
+        print(f"{keywords=} {displayStr=} {is_ignore=}")
+        return keywords, displayStr, is_ignore
 
     async def extract_keywords_from_query_gen(self, user_query: str, conversation_history: Dict[str, List[str]] = None) -> AsyncGenerator[dict, None]:
         # 準備對話歷史（bridge.py 已經將當前 user_query 添加到 conversation_history 中）
