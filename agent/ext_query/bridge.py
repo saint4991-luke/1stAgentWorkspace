@@ -227,15 +227,7 @@ async def query_endpoint(request: Request):
                 
                 # 發送 display 訊息（如果有的話）
                 if display:
-                    yield {
-                        "event": "text_chunk",
-                        "data": json.dumps({
-                            "event": "text_chunk",
-                            "message": display,
-                            "created": created,
-                            "id": event_id
-                        }, ensure_ascii=False, separators=(',', ':'))
-                    }
+                    yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': display, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
                 
                 # Step B: 搜尋資料庫
                 results = await retrieval_agent.search_by_keywords(keywords)
@@ -248,15 +240,7 @@ async def query_endpoint(request: Request):
                     full_answer += chunk
                     
                     # SSE 格式：text_chunk（扁平結構）
-                    yield {
-                        "event": "text_chunk",
-                        "data": json.dumps({
-                            "event": "text_chunk",
-                            "message": chunk,
-                            "created": created,
-                            "id": event_id
-                        }, ensure_ascii=False, separators=(',', ':'))
-                    }
+                    yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': chunk, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
             else:
                 # 不需要查詢 → 直接對話
                 print(f"💬 [Session: {session_id}] 不需要查詢，直接對話")
@@ -266,15 +250,7 @@ async def query_endpoint(request: Request):
                 full_answer = answer
                 
                 # SSE 格式：text_chunk
-                yield {
-                    "event": "text_chunk",
-                    "data": json.dumps({
-                        "event": "text_chunk",
-                        "message": answer,
-                        "created": created,
-                        "id": event_id
-                    }, ensure_ascii=False, separators=(',', ':'))
-                }
+                yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': answer, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
             
             # Step D: 記錄系統回答
             if full_answer:
@@ -288,42 +264,20 @@ async def query_endpoint(request: Request):
             }
             
             # Step E: 完成（SSE 格式：done）
-            yield {
-                "event": "done",
-                "data": json.dumps({
-                    "event": "done",
-                    "created": created,
-                    "id": event_id,
-                    "timing": timing
-                }, ensure_ascii=False, separators=(',', ':'))
-            }
+            yield f"event: done\ndata: {json.dumps({'event': 'done', 'created': created, 'id': event_id, 'timing': timing}, ensure_ascii=False, separators=(',', ':'))}\n\n"
             
             # Step F: [DONE] 標記（規範要求）
-            yield {
-                "event": "done",
-                "data": "[DONE]"
-            }
+            yield "data: [DONE]\n\n"
             
         except Exception as e:
             print(f"❌ [Session: {session_id}] 錯誤：{e}")
             error_message = str(e)
             
             # SSE 格式：error
-            yield {
-                "event": "error",
-                "data": json.dumps({
-                    "event": "error",
-                    "error": error_message,
-                    "created": created,
-                    "id": event_id
-                }, ensure_ascii=False, separators=(',', ':'))
-            }
+            yield f"event: error\ndata: {json.dumps({'event': 'error', 'error': error_message, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
             
             # Step F: [DONE] 標記（錯誤情況）
-            yield {
-                "event": "error",
-                "data": "[DONE]"
-            }
+            yield "data: [DONE]\n\n"
             
             # 記錄錯誤到 Session
             store.add_message(session_id, role="assistant", content=f"錯誤：{error_message}")
