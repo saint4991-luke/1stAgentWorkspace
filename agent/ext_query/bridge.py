@@ -234,11 +234,14 @@ async def query_endpoint(request: Request):
                     # SSE 格式：text_chunk（扁平結構）
                     yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': chunk, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
             else:
-                # 不需要查詢 → 直接對話
-                print(f"💬 [Session: {session_id}] 不需要查詢，直接對話")
+                # 不需要查詢 → 使用 display 作為回應（ignore_retrieve 的情況）
+                print(f"💬 [Session: {session_id}] 不需要查詢，使用 ignore_retrieve")
                 
-                # 使用 Final Agent 生成一般對話回答
-                answer = "請問您想查詢什麼電話號碼或聯絡人嗎？"
+                # 使用 display 作為回應（LLM 已經判斷答案在對話歷史中）
+                if display:
+                    answer = display
+                else:
+                    answer = "請問您想查詢什麼電話號碼或聯絡人嗎？"
                 full_answer = answer
                 
                 # SSE 格式：text_chunk
