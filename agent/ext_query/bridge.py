@@ -328,10 +328,15 @@ async def query_endpoint(request: Request):
             # 記錄錯誤到 Session
             store.add_message(session_id, role="assistant", content=f"錯誤：{error_message}")
     
-    # 6. SSE 串流返回
-    response = EventSourceResponse(
+    # 6. SSE 串流返回（需要自定義 Response 以支持 cookie）
+    from starlette.responses import StreamingResponse
+    from starlette import status
+    
+    # 創建 StreamingResponse 並設置 cookie
+    response = StreamingResponse(
         event_generator(),
-        media_type="text/event-stream"
+        media_type="text/event-stream",
+        status_code=status.HTTP_200_OK
     )
     
     # 設置 Session ID Cookie
@@ -340,7 +345,8 @@ async def query_endpoint(request: Request):
         value=session_id,
         max_age=86400,  # 24 小時
         httponly=True,
-        samesite="lax"
+        samesite="lax",
+        path="/"
     )
     
     return response
