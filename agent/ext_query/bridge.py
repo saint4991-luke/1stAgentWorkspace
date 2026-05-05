@@ -213,31 +213,24 @@ async def query_endpoint(request: Request):
                 conversation_history=conversation_history
             )
             
-            # 先回 display（等待中訊息）- 兩者都需要
-            if display:
-                yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': display, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
-            
             if is_ignore:
-                # 跳過 search，直接交給 Final Agent + 對話歷史
-                print(f"💬 [Session: {session_id}] ignore_retrieve，交給 Final Agent 處理對話歷史")
+                # ignore_retrieve：LLM 已經從對話歷史提取了答案，直接使用 display
+                print(f"💬 [Session: {session_id}] ignore_retrieve，使用 LLM 提取的答案")
                 
-                # 將對話歷史作為「結果」傳給 Final Agent
-                results = {
-                    "ignore_retrieve": True,
-                    "conversation_history": conversation_history
-                }
-                
-                async for chunk in final_agent.generate_answer_stream(user_query, results):
-                    if chunk == "[DONE]":
-                        break
-                    full_answer += chunk
-                    
-                    # SSE 格式：text_chunk（扁平結構）
-                    yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': chunk, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
+                # 直接回 display（LLM 已經提取了答案）
+                if display:
+                    full_answer = display
+                    yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': display, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
+                else:
+                    full_answer = "申し訳ございませんが、回答を抽出できませんでした。"
                     
             elif keywords:
                 # 需要查詢 → 呼叫資料庫
                 print(f"🔍 [Session: {session_id}] 需要查詢：{keywords}")
+                
+                # 先回 display（等待中訊息）
+                if display:
+                    yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': display, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
                 
                 # Step B: 搜尋資料庫
                 results = await retrieval_agent.search_by_keywords(keywords)
