@@ -13,6 +13,7 @@ First describe why each tool is or is not relevant, then decide the tool that ne
 4. For the tool_display field:
    - If using `retrieve_from_text`: use ひらがな of the tool_input value to describe what you are searching (e.g., "なおきを使って検索しています")
    - If using `ignore_retrieve`: **extract the answer from conversation history and provide it directly** (e.g., "潘姿云是行政部總務課的專員，分機 7001")
+5. **Character limit: tool_display must be less than 100 characters** (including spaces and punctuation). Keep responses concise and direct.
 
 **CRITICAL: Before deciding to retrieve, check the conversation history:**
 - If the user asks about something already discussed (e.g., "What was that extension number?"), use `ignore_retrieve`
