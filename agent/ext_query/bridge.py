@@ -5,9 +5,12 @@ bridge.py - Session + ext_query 橋接服務
 - session/ 模組（Session 管理）
 - ext_query/ 模組（電話號碼查詢）
 
-API 端點：
-- POST /query - 統一查詢入口（SSE 串流）
-- GET /session/{session_id} - 獲取 Session 詳情
+API 端點（根據 AIJPDNC-QueryRESTAPIforDNC-110526-1134-192.pdf 規範）:
+- GET /session - 創建 Session（初始化會話環境）
+- POST /chat - 聊天查詢（SSE 串流）
+- GET /session/{session_id} - 獲取 Session 詳情（除錯用）
+- GET /sessions - 獲取所有活躍 Session
+- DELETE /session/{session_id} - 刪除 Session
 - GET /health - 健康檢查
 """
 
@@ -109,6 +112,83 @@ app = FastAPI(
 )
 
 
+@app.get("/session")
+async def create_session():
+    """
+    創建 Session（初始化會話環境）
+    
+    根據規範 AIJPDNC-QueryRESTAPIforDNC-110526-1134-192.pdf Section 1.1
+    
+    HTTP Method: GET
+    Response Content-Type: application/json
+    
+    Response Headers:
+    - Set-Cookie: session_id=EXT_...; HttpOnly; SameSite=Lax; Path=/
+    
+    Response Body:
+    {
+        "event": "done",
+        "message": {
+            "session_id": "EXT_4e5c693f-7a30-4452-a902-792e64cb6a6e",
+            "metadata": {},
+            "created_at": "2026-05-08T03:19:12.224206",
+            "last_active": "2026-05-08T03:19:12.224206",
+            "ttl_hours": 24
+        },
+        "created": 1778210352,
+        "id": "EXT_4e5c693f-7a30-4452-a902-792e64cb6a6e_1778210352",
+        "timing": {
+            "total_ms": 2
+        }
+    }
+    """
+    if not SESSION_AVAILABLE or not store:
+        raise HTTPException(status_code=503, detail="Session module not available")
+    
+    # 創建新 Session
+    session_data = store.create_session(
+        prefix="EXT",
+        metadata={},
+        ttl_hours=24
+    )
+    
+    session_id = session_data['session_id']
+    created = int(time.time())
+    
+    print(f"🆕 創建新 Session: {session_id}")
+    
+    # 構建響應（符合規範格式）
+    response_data = {
+        "event": "done",
+        "message": {
+            "session_id": session_id,
+            "metadata": session_data.get('metadata', {}),
+            "created_at": session_data['created_at'],
+            "last_active": session_data['last_active'],
+            "ttl_hours": session_data['ttl_hours']
+        },
+        "created": created,
+        "id": f"{session_id}_{created}",
+        "timing": {
+            "total_ms": 1  # 創建操作非常快
+        }
+    }
+    
+    # 創建 JSONResponse 並設置 cookie
+    response = JSONResponse(content=response_data)
+    
+    # 設置 Session ID Cookie（符合規範）
+    response.set_cookie(
+        key="session_id",
+        value=session_id,
+        httponly=True,
+        samesite="lax",
+        path="/"
+    )
+    
+    return response
+
+
 @app.get("/health")
 async def health_check():
     """
@@ -125,23 +205,39 @@ async def health_check():
     }
 
 
-@app.post("/query")
-async def query_endpoint(request: Request):
+@app.post("/chat")
+async def chat_endpoint(request: Request):
     """
-    統一查詢入口
+    聊天查詢（SSE 串流）
     
-    流程：
-    1. 用戶識別 → 2. Session 管理 → 3. ext_query 判斷 → 4. 記錄對話 → 5. 返回結果
+    根據規範 AIJPDNC-QueryRESTAPIforDNC-110526-1134-192.pdf Section 1.2
     
-    請求：
-    - Header: X-User-ID (必填)
-    - Cookie: session_id (可選)
-    - Body: {"query": "用戶問題"}
+    HTTP Method: POST
+    Content-Type: application/json
+    Accept: text/event-stream
+    Cookie: session_id=<YOUR_SESSION_ID>
     
-    回應：SSE 串流
-    - event: text_chunk - 回答內容片段
-    - event: done - 完成
-    - event: error - 錯誤
+    Request Body:
+    {
+        "input": "${input}"
+    }
+    
+    Response Headers:
+    - Content-Type: text/event-stream; charset=utf-8
+    - Cache-Control: no-cache
+    - Connection: keep-alive
+    
+    Response Body (Stream):
+    event: text_chunk
+    data: {"event":"text_chunk","message":"","created":1778211058,"id":"EXT_0acbce59-4502-4eb8-8661-26cb1a6b222e_1778211058"}
+    ...
+    event: done
+    data: {"event":"done","created":1778211058,"id":"EXT_0acbce59-4502-4eb8-8661-26cb1a6b222e_1778211058","timing":{...}}
+    data: [DONE]
+    
+    Session Expired:
+    HTTP Status: 401 Unauthorized
+    Body: {"detail": "Session expired or invalid. Please re-initialize session."}
     """
     # 檢查模組就緒狀態
     if not SESSION_AVAILABLE or not store:
@@ -150,26 +246,24 @@ async def query_endpoint(request: Request):
     if not EXT_QUERY_AVAILABLE or not retrieval_agent or not final_agent:
         raise HTTPException(status_code=503, detail="ext_query module not available")
     
-    # 1. Session 管理（檢查是否為連續對話）
+    # 1. Session 管理（檢查 cookie 中的 session_id）
     session_id = request.cookies.get("session_id")
-    session = None
     
-    if session_id:
-        session = store.get_session(session_id)
-        if not session:
-            session_id = None  # Session 過期，重新創建
-    
-    # 創建新 Session
+    # 如果沒有 session_id 或 session 不存在，返回 401（符合規範）
     if not session_id:
-        session_data = store.create_session(
-            prefix="EXT",
-            metadata={},
-            ttl_hours=24
+        raise HTTPException(
+            status_code=401,
+            detail="Session expired or invalid. Please re-initialize session."
         )
-        session_id = session_data['session_id']
-        print(f"🆕 創建新 Session: {session_id}")
-    else:
-        print(f"🔄 使用現有 Session: {session_id}")
+    
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=401,
+            detail="Session expired or invalid. Please re-initialize session."
+        )
+    
+    print(f"🔄 使用現有 Session: {session_id}")
     
     # 3. 獲取用戶問題
     try:
@@ -364,14 +458,16 @@ async def root():
     return {
         "name": "ExtQuery Bridge",
         "version": "1.0.0",
-        "description": "Session + ext_query 整合服務",
+        "description": "Session + ext_query 整合服務（符合 AIJPDNC-QueryRESTAPIforDNC 規範）",
         "endpoints": {
-            "POST /query": "統一查詢入口（SSE 串流）",
-            "GET /session/{session_id}": "獲取 Session 詳情",
+            "GET /session": "創建 Session（初始化會話環境）",
+            "POST /chat": "聊天查詢（SSE 串流）",
+            "GET /session/{session_id}": "獲取 Session 詳情（除錯用）",
             "GET /sessions": "獲取所有活躍 Session",
             "DELETE /session/{session_id}": "刪除 Session",
             "GET /health": "健康檢查"
-        }
+        },
+        "specification": "docs/03_specs/AIJPDNC-QueryRESTAPIforDNC-110526-1134-192.pdf"
     }
 
 
@@ -385,7 +481,12 @@ if __name__ == "__main__":
     print(f"📍 Host: {BRIDGE_HOST}")
     print(f"🔌 Port: {BRIDGE_PORT}")
     print(f"💾 Session DB: {SESSION_DB_PATH}")
-    print(f"🔑 User ID Header: {USER_ID_HEADER}")
+    print(f"📜 規範：AIJPDNC-QueryRESTAPIforDNC-110526-1134-192.pdf")
+    print("=" * 60)
+    print("API 端點:")
+    print("  GET  /session - 創建 Session")
+    print("  POST /chat    - 聊天查詢（SSE 串流）")
+    print("  GET  /health  - 健康檢查")
     print("=" * 60)
     
     uvicorn.run(
