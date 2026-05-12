@@ -195,22 +195,20 @@ Agent 可以使用以下 **2 個工具**：
 ```
 ```
 
-### 範例 4：感謝回應（ignore_retrieve）
+### 範例 4：與查詢無關的回應（ignore_retrieve）
 
 ```
-用戶：ありがとう
-對話歷史：
-  User: 遠藤和也の電話番号は？
-  Assistant: 遠藤和也の内線番号は 1121 です。
+用戶：今天天氣真好
+對話歷史：（無）
 
 輸出：
 ```json
 [{
-    "context_reasoning": "The user is saying 'thank you' after I already provided the phone number for 遠藤和也 (extension 1121). No new retrieval is needed.",
-    "tool_reasoning": "I will respond politely without retrieval since the conversation is complete.",
+    "context_reasoning": "The user's message is unrelated to phone extension queries. I need to politely ask for department or name input.",
+    "tool_reasoning": "This is not a valid query for phone extensions. I will use ignore_retrieve to prompt the user for proper input.",
     "tool": "ignore_retrieve",
     "tool_input": {"x": ""},
-    "tool_display": {"y": "どういたしまして。他にご用件はございますか？"}
+    "tool_display": {"y": "恐れ入りますが、部署名またはお名前をご入力いただけますでしょうか。入力完了後、検索を開始いたします。"}
 }]
 ```
 ```
