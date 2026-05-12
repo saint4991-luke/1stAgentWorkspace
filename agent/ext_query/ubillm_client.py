@@ -252,12 +252,12 @@ async def call_ubillm(
 ) -> Dict[str, Any]:
     """
     便捷函數：呼叫 uBillm LLM API（電話號碼資料庫查詢）
-    自動加入 system prompt，並交錯組合 user 和 assistant 的對話歷史
+    自動加入 system prompt，並交錯組合 user 和 tool 的對話歷史
     
     參數：
         model: 模型名稱
         user_messages: 用戶訊息列表 ["訊息 1", "訊息 2", ...]
-        assistant_messages: 助手回應列表 ["回應 1", "回應 2", ...]
+        assistant_messages: 工具回應列表 ["回應 1", "回應 2", ...]
         enable_thinking: 是否啟用思考模式
         temperature: 溫度參數
         api_key: API 金鑰（可選，預設使用環境變數）
@@ -266,7 +266,7 @@ async def call_ubillm(
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_message1},
-            {"role": "assistant", "content": assistant_message1},
+            {"role": "tool", "content": tool_message1},
             {"role": "user", "content": user_message2},
             ...
         ]
@@ -283,16 +283,16 @@ async def call_ubillm(
     """
     client = uBillmClient(api_key=api_key)
     
-    # 交錯組合 user 和 assistant 的訊息
+    # 交錯組合 user 和 tool 的訊息
     messages = []
     user_msgs = user_messages or []
     assistant_msgs = assistant_messages or []
     
-    # 交錯組合（user, assistant, user, assistant, ...）
+    # 交錯組合（user, tool, user, tool, ...）
     for i, user_msg in enumerate(user_msgs):
         messages.append({"role": "user", "content": user_msg})
         if i < len(assistant_msgs):
-            messages.append({"role": "assistant", "content": assistant_msgs[i]})
+            messages.append({"role": "tool", "content": assistant_msgs[i]})
     
     # 自動加入 system prompt（如果還沒有）
     has_system = any(msg.get("role") == "system" for msg in messages)
