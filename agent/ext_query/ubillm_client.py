@@ -113,6 +113,7 @@ class uBillmClient:
         temperature: float = 0,
         enable_thinking: bool = False,
         stream: bool = False,
+        max_tokens: int = 2000,
         **kwargs
     ) -> Dict[str, Any]:
         """
@@ -125,6 +126,7 @@ class uBillmClient:
             temperature: 溫度參數
             enable_thinking: 是否啟用思考模式
             stream: 是否使用串流模式
+            max_tokens: 最大生成 token 數（預設 2000）
         
         Returns:
             LLM 響應字典
@@ -150,6 +152,7 @@ class uBillmClient:
                     json={
                         "messages": messages,
                         "temperature": temperature,
+                        "max_tokens": max_tokens,
                         "chat_template_kwargs": {"enable_thinking": enable_thinking},
                         "stream": stream,
                         **kwargs
