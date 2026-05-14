@@ -103,16 +103,43 @@ Agent 可以使用以下 **2 個工具**：
 
 **tool_display 規則：**
 - **從對話歷史中提取答案**（不是等待訊息！）
-- 範例：`"潘姿云是行政部總務課的專員"`
+- **當根據 tool 記錄（檢索結果或對話歷史）準備 tool_display 時，必須參考 `ext_final_agent_prompt_spec.md` 定義的格式**
+- 使用標準 JSON 格式，包含完整的結構化資訊
+
+**tool_display 格式（參考 ext_final_agent_prompt_spec.md）：**
+```
+お待たせいたしました<!-- json>
+{
+  "search_result": [
+    {
+      "部門": "<部門>",
+      "課": "<課>",
+      "役職": "<役職>",
+      "姓氏": "<姓>",
+      "名字": "<名>",
+      "内線番号": "<電話號碼>"
+    }
+  ]
+}
+</json -->
+```
+
+**tool_display 規則：**
+- ✅ 必須以「お待たせいたしました」開頭
+- ✅ 必須使用 `<!-- json> ... </json -->` HTML 註解包裝
+- ✅ 必須包含 6 個必填欄位：部門、課、役職、姓氏、名字、内線番号
+- ✅ 姓名必須分割為「姓氏」和「名字」
+- ✅ 不包含讀音（氏名読音）
+- ✅ **總輸出必須 < 200 字元**（包含開場白、JSON、空格、標點）
 
 **範例：**
 ```json
 [{
-    "context_reasoning": "The user is asking about the department of 潘姿云。The previous assistant response already contains this information: 行政部，總務課，專員.",
-    "tool_reasoning": "The answer is in the conversation history. I will extract it directly without retrieval.",
+    "context_reasoning": "The user is asking about the department of 潘姿云。The previous assistant response already contains this information: 行政部，總務課，專員，潘，姿云，7001.",
+    "tool_reasoning": "The answer is in the conversation history. I will extract it directly without retrieval and format it according to ext_final_agent_prompt_spec.md.",
     "tool": "ignore_retrieve",
     "tool_input": {"x": ""},
-    "tool_display": {"y": "潘姿云是行政部總務課的專員"}
+    "tool_display": {"y": "お待たせいたしました<!-- json>{\"search_result\":[{\"部門\":\"行政部\",\"課\":\"總務課\",\"役職\":\"專員\",\"姓氏\":\"潘\",\"名字\":\"姿云\",\"内線番号\":\"7001\"}]} </json -->"}
 }]
 ```
 
