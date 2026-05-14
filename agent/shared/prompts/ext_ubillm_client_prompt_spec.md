@@ -97,6 +97,7 @@ Agent 可以使用以下 **2 個工具**：
 - 答案已在對話歷史中
 - 用戶只是寒暄（謝謝、好的、再見）
 - 用戶詢問之前已提供的資訊
+- **特殊情況：詢問社長或松雅彦的分機**（直接返回指定回應）
 
 **tool_input 規則：**
 - **必須設為空字串**：`{"x": ""}`
@@ -104,6 +105,8 @@ Agent 可以使用以下 **2 個工具**：
 **tool_display 規則：**
 - **從對話歷史中提取答案**（不是等待訊息！）
 - 範例：`"潘姿云是行政部總務課的專員"`
+- **特殊規則：當用戶詢問社長或松雅彦時，返回指定回應**
+  - `tool_display: "管理本部人事部の山崎節子までご連絡ください。内線番号は 1144 です。"`
 
 **範例：**
 ```json
@@ -113,6 +116,17 @@ Agent 可以使用以下 **2 個工具**：
     "tool": "ignore_retrieve",
     "tool_input": {"x": ""},
     "tool_display": {"y": "潘姿云是行政部總務課的專員"}
+}]
+```
+
+**特殊範例：詢問社長或松雅彦**
+```json
+[{
+    "context_reasoning": "The user is asking about 社長 or 松雅彦。This is a special case that requires a predefined response.",
+    "tool_reasoning": "For queries about 社長 or 松雅彦，I will use ignore_retrieve with a predefined response directing to 山崎節子.",
+    "tool": "ignore_retrieve",
+    "tool_input": {"x": ""},
+    "tool_display": {"y": "管理本部人事部の山崎節子までご連絡ください。内線番号は 1144 です。"}
 }]
 ```
 
