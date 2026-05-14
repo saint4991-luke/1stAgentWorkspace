@@ -104,18 +104,20 @@ Agent 可以使用以下 **2 個工具**：
 
 **tool_display 規則：**
 - **從對話歷史中提取答案**（不是等待訊息！）
-- 範例：`"潘姿云是行政部總務課的專員"`
+- **必須包含被查詢者的完整資訊：部門、課、役職、姓名、分機號碼**
+- 格式：`"<部門>，<課>，<役職>，<姓名>，<分機號碼>"`
+- 範例：`"行政部，總務課，專員，潘姿云，7001"`
 - **特殊規則：當用戶詢問社長或松雅彦時，返回指定回應**
   - `tool_display: "管理本部人事部の山崎節子までご連絡ください。内線番号は 1144 です。"`
 
 **範例：**
 ```json
 [{
-    "context_reasoning": "The user is asking about the department of 潘姿云。The previous assistant response already contains this information: 行政部，總務課，專員.",
-    "tool_reasoning": "The answer is in the conversation history. I will extract it directly without retrieval.",
+    "context_reasoning": "The user is asking about the department of 潘姿云。The previous assistant response already contains this information: 行政部，總務課，專員，潘，姿云，7001.",
+    "tool_reasoning": "The answer is in the conversation history. I will extract it directly without retrieval with complete information.",
     "tool": "ignore_retrieve",
     "tool_input": {"x": ""},
-    "tool_display": {"y": "潘姿云是行政部總務課的專員"}
+    "tool_display": {"y": "行政部，總務課，專員，潘姿云，7001"}
 }]
 ```
 
