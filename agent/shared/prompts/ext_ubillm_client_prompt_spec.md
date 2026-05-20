@@ -103,32 +103,74 @@ Agent 可以使用以下 **2 個工具**：
 - **必須設為空字串**：`{"x": ""}`
 
 **tool_display 規則：**
-- **從對話歷史中提取答案**（不是等待訊息！）
-- **必須包含被查詢者的完整資訊：部門、課、役職、姓名、分機號碼**
-- 格式：`"<部門>，<課>，<役職>，<姓名>，<分機號碼>"`
-- 範例：`"行政部，總務課，專員，潘姿云，7001"`
-- **特殊規則：當用戶詢問社長或松雅彦時，返回指定回應**
-  - `tool_display: "管理本部人事部の山崎節子までご連絡ください。内線番号は 1144 です。"`
+
+#### 情況 A：當 tool 有提供查詢者資訊時
+
+**格式：**
+```json
+{
+  "y": "お待たせいたしました",
+  "search_result": [
+    {
+      "部門": "<部門>",
+      "課": "<課>",
+      "役職": "<役職>",
+      "姓氏": "<姓>",
+      "名字": "<名>",
+      "内線番号": "<電話號碼>"
+    }
+  ]
+}
+```
+
+**規則：**
+- ✅ `y` 固定為 "お待たせいたしました"
+- ✅ `search_result` 包含完整的結構化資訊
+- ✅ 必須包含 6 個欄位：部門、課、役職、姓氏、名字、内線番号
+- ✅ 從對話歷史或 tool 提供的資訊中提取
 
 **範例：**
 ```json
 [{
-    "context_reasoning": "The user is asking about the department of 潘姿云。The previous assistant response already contains this information: 行政部，總務課，專員，潘，姿云，7001.",
-    "tool_reasoning": "The answer is in the conversation history. I will extract it directly without retrieval with complete information.",
+    "context_reasoning": "The user is asking about 潘姿云。The previous assistant response already contains this information: 行政部，總務課，專員，潘，姿云，7001.",
+    "tool_reasoning": "The answer is in the conversation history. I will extract it directly without retrieval with complete structured information.",
     "tool": "ignore_retrieve",
     "tool_input": {"x": ""},
-    "tool_display": {"y": "行政部，總務課，專員，潘姿云，7001"}
+    "tool_display": {
+      "y": "お待たせいたしました",
+      "search_result": [
+        {
+          "部門": "行政部",
+          "課": "總務課",
+          "役職": "專員",
+          "姓氏": "潘",
+          "名字": "姿云",
+          "内線番号": "7001"
+        }
+      ]
+    }
 }]
 ```
 
-**特殊範例：詢問社長或松雅彦**
+#### 情況 B：特殊情況（社長/松雅彦）
+
+**格式：**
+```json
+{
+  "y": "管理本部人事部の山崎節子までご連絡ください。内線番号は 1144 です。"
+}
+```
+
+**範例：**
 ```json
 [{
     "context_reasoning": "The user is asking about 社長 or 松雅彦。This is a special case that requires a predefined response.",
     "tool_reasoning": "For queries about 社長 or 松雅彦，I will use ignore_retrieve with a predefined response directing to 山崎節子.",
     "tool": "ignore_retrieve",
     "tool_input": {"x": ""},
-    "tool_display": {"y": "管理本部人事部の山崎節子までご連絡ください。内線番号は 1144 です。"}
+    "tool_display": {
+      "y": "管理本部人事部の山崎節子までご連絡ください。内線番号は 1144 です。"
+    }
 }]
 ```
 
