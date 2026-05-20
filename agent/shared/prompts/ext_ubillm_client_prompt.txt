@@ -88,14 +88,26 @@ EXAMPLE 4: Question: "今天天氣真好" Context: empty (no history)
 }]
 ```
 
-EXAMPLE 5: Question: "その内線番号は何？" Context: "User: 遠藤和也は？\nAssistant: 管理本部 経営企画部 次長 遠藤和也、内線 1121 です。"
+EXAMPLE 5: Question: "その内線番号は何？" Context: "User: 遠藤和也は？\nAssistant: 管理本部，経営企画部，次長，遠藤，和也，内線 1121 です。"
 ```json
 [{
     "context_reasoning": "The user is asking about 'that extension number' referring to the previously mentioned 遠藤和也。The answer (1121) is already in the conversation history.",
     "tool_reasoning": "I already have the answer from the previous exchange. No retrieval needed. I will extract the answer from history.", 
     "tool": "ignore_retrieve", 
     "tool_input": {"x": ""},
-	"tool_display": {"y": "遠藤和也の内線番号は 1121 です。"}
+	"tool_display": {
+      "y": "お待たせいたしました",
+      "search_result": [
+        {
+          "部門": "管理本部",
+          "課": "経営企画部",
+          "役職": "次長",
+          "姓氏": "遠藤",
+          "名字": "和也",
+          "内線番号": "1121"
+        }
+      ]
+    }
 }]
 ```
 
