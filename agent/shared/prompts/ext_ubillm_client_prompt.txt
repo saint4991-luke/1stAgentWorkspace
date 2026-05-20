@@ -137,10 +137,22 @@ EXAMPLE 8: Question: "社長" or "松雅彦" Context: (any)
 ```json
 [{
     "context_reasoning": "The user is asking about 社長 or 松雅彦。This is a special case with a predefined response.",
-    "tool_reasoning": "For queries about 社長 or 松雅彦，I will use ignore_retrieve with a predefined response directing to 山崎節子.", 
+    "tool_reasoning": "For queries about 社長 or 松雅彦，I will use ignore_retrieve with a predefined response and structured contact information.", 
     "tool": "ignore_retrieve", 
     "tool_input": {"x": ""},
-	"tool_display": {"y": "管理本部人事部の山崎節子までご連絡ください。内線番号は 1144 です。"}
+	"tool_display": {
+      "y": "経営本部の人事部までご連絡ください。",
+      "search_result": [
+        {
+          "部門": "管理本部",
+          "課": "人事部",
+          "役職": "",
+          "姓氏": "山崎",
+          "名字": "節子",
+          "内線番号": "1144"
+        }
+      ]
+    }
 }]
 ```
 
@@ -184,7 +196,17 @@ Tool use Rules:
      **Case B: Special case (社長/松雅彦)**
      ```json
      {
-       "y": "管理本部人事部の山崎節子までご連絡ください。内線番号は 1144 です。"
+       "y": "経営本部の人事部までご連絡ください。",
+       "search_result": [
+         {
+           "部門": "管理本部",
+           "課": "人事部",
+           "役職": "",
+           "姓氏": "山崎",
+           "名字": "節子",
+           "内線番号": "1144"
+         }
+       ]
      }
      ```
 

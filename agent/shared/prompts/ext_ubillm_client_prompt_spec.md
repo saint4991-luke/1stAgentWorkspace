@@ -157,19 +157,44 @@ Agent 可以使用以下 **2 個工具**：
 **格式：**
 ```json
 {
-  "y": "管理本部人事部の山崎節子までご連絡ください。内線番号は 1144 です。"
+  "y": "経営本部の人事部までご連絡ください。",
+  "search_result": [
+    {
+      "部門": "管理本部",
+      "課": "人事部",
+      "役職": "",
+      "姓氏": "山崎",
+      "名字": "節子",
+      "内線番号": "1144"
+    }
+  ]
 }
 ```
+
+**規則：**
+- ✅ `y` 為指引用戶聯繫的文字
+- ✅ `search_result` 包含聯絡人的結構化資訊
+- ✅ 必須包含 6 個欄位：部門、課、役職、姓氏、名字、内線番号
 
 **範例：**
 ```json
 [{
     "context_reasoning": "The user is asking about 社長 or 松雅彦。This is a special case that requires a predefined response.",
-    "tool_reasoning": "For queries about 社長 or 松雅彦，I will use ignore_retrieve with a predefined response directing to 山崎節子.",
+    "tool_reasoning": "For queries about 社長 or 松雅彦，I will use ignore_retrieve with a predefined response and structured contact information.",
     "tool": "ignore_retrieve",
     "tool_input": {"x": ""},
     "tool_display": {
-      "y": "管理本部人事部の山崎節子までご連絡ください。内線番号は 1144 です。"
+      "y": "経営本部の人事部までご連絡ください。",
+      "search_result": [
+        {
+          "部門": "管理本部",
+          "課": "人事部",
+          "役職": "",
+          "姓氏": "山崎",
+          "名字": "節子",
+          "内線番号": "1144"
+        }
+      ]
     }
 }]
 ```
