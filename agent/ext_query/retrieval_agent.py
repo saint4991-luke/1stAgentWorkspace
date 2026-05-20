@@ -105,9 +105,9 @@ class RetrievalAgent:
                 is_ignore = True
                 tool_display = call.get("tool_display", {})
                 displayStr = tool_display.get("y", "")
-                # 提取 search_result（如果有）
+                # 提取 search_result（如果有）- 只提取 search_result 陣列
                 if "search_result" in tool_display:
-                    search_result = tool_display
+                    search_result = {"search_result": tool_display["search_result"]}
                 # 不提取 keywords，保持空列表
 
         return keywords, displayStr, is_ignore, search_result
