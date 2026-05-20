@@ -302,17 +302,23 @@ async def chat_endpoint(request: Request):
             
             # Step A: 判斷是否需要查詢（傳入對話歷史）
             print(f"🔍 [Session: {session_id}] 判斷意圖...")
-            keywords, display, is_ignore = await retrieval_agent.extract_keywords_from_query(
+            keywords, display, is_ignore, search_result = await retrieval_agent.extract_keywords_from_query(
                 user_query, 
                 conversation_history=conversation_history
             )
             
             if is_ignore:
-                # ignore_retrieve：LLM 已經從對話歷史提取了答案，直接使用 display
+                # ignore_retrieve：LLM 已經從對話歷史提取了答案
                 print(f"💬 [Session: {session_id}] ignore_retrieve，使用 LLM 提取的答案")
                 
-                # 直接回 display（LLM 已經提取了答案）
-                if display:
+                # 檢查是否有 search_result
+                if search_result:
+                    # 有 search_result：傳送結構化 JSON
+                    search_display = f"<!-- json>{json.dumps(search_result, ensure_ascii=False)}</json -->"
+                    full_answer = search_display
+                    yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': search_display, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
+                elif display:
+                    # 只有 display：直接傳送
                     full_answer = display
                     yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': display, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
                 else:

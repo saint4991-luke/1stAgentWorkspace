@@ -38,7 +38,7 @@ setup_logging("ext_query")
 
 class RetrievalAgent:
     """電話號碼資料庫 Retrieval Agent"""
-    
+
     def __init__(
         self,
         milvus_uri: str = "http://192.168.16.106:19530",
@@ -54,7 +54,7 @@ class RetrievalAgent:
         self.milvus_collection = milvus_collection
         self.milvus_vector_field = milvus_vector_field
         self.search_limit = search_limit
-        
+
         # 初始化 Milvus 搜尋器
         '''
         self.milvus_searcher = MilvusSearcher(
@@ -63,7 +63,7 @@ class RetrievalAgent:
             collection_name=milvus_collection
         )
         '''
-    
+
     def parse_ubillm_response(self, content: str) -> List[Dict[str, Any]]:
         """解析 uBillm 的 JSON 響應"""
         try:
@@ -75,22 +75,24 @@ class RetrievalAgent:
         except Exception as e:
             print(f"JSON 解析失敗：{e}")
             return []
-    
-    def extract_keywords(self, tool_calls: List[Dict[str, Any]]) -> Tuple[List[str], str, bool]:
+
+    def extract_keywords(self, tool_calls: List[Dict[str, Any]]) -> Tuple[List[str], str, bool, Dict[str, Any]]:
         """從工具調用中提取關鍵字
-        
+
         Returns:
             keywords: 關鍵字列表（retrieve_from_text 時有值）
             displayStr: 顯示訊息（兩者都有）
             is_ignore_retrieve: 是否為 ignore_retrieve 模式
+            search_result: search_result 資料（ignore_retrieve 時可能有值）
         """
         keywords = []
         displayStr = ""
         is_ignore = False
-        
+        search_result = {}
+
         for call in tool_calls:
             tool = call.get("tool")
-            
+
             if tool == "retrieve_from_text":
                 tool_input = call.get("tool_input", {})
                 query = tool_input.get("x", "")
@@ -98,16 +100,19 @@ class RetrievalAgent:
                     keywords.append(query)
                 tool_display = call.get("tool_display", {})
                 displayStr = tool_display.get("y", "")
-                
+
             elif tool == "ignore_retrieve":
                 is_ignore = True
                 tool_display = call.get("tool_display", {})
                 displayStr = tool_display.get("y", "")
+                # 提取 search_result（如果有）
+                if "search_result" in tool_display:
+                    search_result = tool_display
                 # 不提取 keywords，保持空列表
-        
-        return keywords, displayStr, is_ignore
-    
-    async def extract_keywords_from_query(self, user_query: str, conversation_history: Dict[str, List[str]] = None) -> Tuple[List[str], str, bool]:
+
+        return keywords, displayStr, is_ignore, search_result
+
+    async def extract_keywords_from_query(self, user_query: str, conversation_history: Dict[str, List[str]] = None) -> Tuple[List[str], str, bool, Dict[str, Any]]:
         """
         Step 1: 呼叫 uBillm 解析用戶意圖，提取關鍵字
         
@@ -119,6 +124,7 @@ class RetrievalAgent:
             keywords: 關鍵字列表
             display: 顯示訊息
             is_ignore: 是否為 ignore_retrieve 模式
+            search_result: search_result 資料（ignore_retrieve 時可能有值）
         """
         print("Step 1: 解析用戶意圖...")
         
@@ -139,28 +145,28 @@ class RetrievalAgent:
         # 解析 JSON
         tool_calls = self.parse_ubillm_response(content)
         if not tool_calls:
-            return [], None, False
+            return [], None, False, {}
         
         # 提取關鍵字
-        keywords, displayStr, is_ignore = self.extract_keywords(tool_calls)
+        keywords, displayStr, is_ignore, search_result = self.extract_keywords(tool_calls)
         if not keywords and not is_ignore:
-            return [], displayStr, False
+            return [], displayStr, False, {}
         
-        print(f"{keywords=} {displayStr=} {is_ignore=}")
-        return keywords, displayStr, is_ignore
+        print(f"{keywords=} {displayStr=} {is_ignore=} {search_result=}")
+        return keywords, displayStr, is_ignore, search_result
 
     async def extract_keywords_from_query_gen(self, user_query: str, conversation_history: Dict[str, List[str]] = None) -> AsyncGenerator[dict, None]:
         # 準備對話歷史（bridge.py 已經將當前 user_query 添加到 conversation_history 中）
         user_messages = conversation_history.get("user", []) if conversation_history else []
         assistant_messages = conversation_history.get("assistant", []) if conversation_history else []
-        
+
         ubillm_response = await call_ubillm(
             model=self.ubillm_model,
             user_messages=user_messages,
             assistant_messages=assistant_messages,
             enable_thinking=False
         )
-        
+
         content = ubillm_response["choices"][0]["message"]["content"]
         tool_calls = self.parse_ubillm_response(content)
         print(f"extract_keywords_from_query_gen {tool_calls=}\n")
@@ -175,14 +181,14 @@ class RetrievalAgent:
             return
         print(f'extract_keywords_from_query_gen status=completed {keywords=} {displayStr=}\n')
         yield {"status": "completed", "keywords": keywords, "display": displayStr}
-    
+
     async def search_by_keywords(self, keywords: List[str]) -> List[Dict[str, Any]]:
         """
         根據關鍵字搜尋電話號碼
-        
+
         Args:
             keywords: 關鍵字列表（例如：["高島 (たかしま)"]）
-        
+
         Returns:
             搜尋結果列表
         """
@@ -197,7 +203,7 @@ class RetrievalAgent:
         except Exception as e:
             print(f"Embedding 失敗：{e}")
             return [{"error": f"Embedding 失敗：{e}"}]
-        
+
         # Step 3: Milvus 搜尋
         '''
         print("Step 3: Milvus 搜尋...")
@@ -207,9 +213,9 @@ class RetrievalAgent:
                 limit=self.search_limit,
                 output_fields=["*"]  # 返回所有欄位
             )
-            
+
             print(f"找到 {len(results)} 筆結果")
-            
+
             # 格式化結果
             formatted_results = []
             for i, result in enumerate(results, 1):
@@ -219,9 +225,9 @@ class RetrievalAgent:
                     "entity": result.get("entity", {})
                 }
                 formatted_results.append(formatted)
-            
+
             return formatted_results
-            
+
         except Exception as e:
             print(f"Milvus 搜尋失敗：{e}")
             return [{"error": f"Milvus 搜尋失敗：{e}"}]
@@ -229,7 +235,7 @@ class RetrievalAgent:
         try:
             results = await self.qdrant_search(QDRANT_HOST, QDRANT_PORT, query_vector=vectors, limit=self.search_limit)
             print(f"找到 {len(results)} 筆結果")
-            
+
             # 格式化結果
             formatted_results = []
             for i, result in enumerate(results, 1):
@@ -239,15 +245,15 @@ class RetrievalAgent:
                     "entity": result.get("entity", {})
                 }
                 formatted_results.append(formatted)
-            
+
             return formatted_results
-            
+
         except Exception as e:
             print(f"qdrant 搜尋失敗：{e}")
             return [{"error": f"qdrant 搜尋失敗：{e}"}]
-    
+
     async def qdrant_search(self, host, port, query_vector: List[float],limit:int)-> List[Dict[str, Any]]:
-        print(f"qdrant_search IN")       
+        print(f"qdrant_search IN")
         # Python 客戶端會自動處理連接池
         client = QdrantClient(host=host, port=port, prefer_grpc=True, check_compatibility=False)
         results = []
@@ -268,14 +274,14 @@ class RetrievalAgent:
                 "score": result.score,
                 "entity": result.payload  # 這裡包含 content 以及其他欄位
             })
-                
+
         except Exception as e:
             print(f"發生錯誤: {e}")
         finally:
             # 關閉連線
             client.close()
         return results
-    
+
     def close(self):
         """關閉資源"""
         self.milvus_searcher.close()
@@ -291,7 +297,7 @@ async def retrieve_phone_number(
 ) -> List[Dict[str, Any]]:
     """
     便捷函數：搜尋電話號碼
-    
+
     Args:
         query: 用戶查詢
         ubillm_model: LLM 模型
@@ -299,7 +305,7 @@ async def retrieve_phone_number(
         milvus_uri: Milvus 地址
         milvus_collection: Milvus 集合
         limit: 結果數量
-    
+
     Returns:
         搜尋結果
     """
@@ -310,7 +316,7 @@ async def retrieve_phone_number(
         milvus_collection=milvus_collection,
         search_limit=limit
     )
-    
+
     try:
         # 方式 2: 分開呼叫 Step 1 + Step 2-3
         keywords = await agent.extract_keywords_from_query("我要找遠藤和也")
@@ -339,28 +345,28 @@ async def telsurvey_checkextension(request: InputParserRequest, raw_request: Req
                 search_keywords = [] # 用於搜尋的列表
                 print("1.正在提取關鍵字...")
                 async for step in retrieval_agent.extract_keywords_from_query_gen(request.input):
-                    if await raw_request.is_disconnected(): return          
+                    if await raw_request.is_disconnected(): return
                     if step["status"] == "completed":
                         search_keywords = step["keywords"] # 取得 List
                         #display_text = "正在搜尋：" + ", ".join(search_keywords)
                         display_text = step["display"]
                         yield {
-                            "event": "text_chunk", 
+                            "event": "text_chunk",
                             "data": json.dumps({"event": "text_chunk", "message":display_text}, ensure_ascii=False)
                         }
                 if not search_keywords:
-                    yield {"event": "error", 
-                           "data": json.dumps({"event": "error", "error":"質問の内容が確認できません。もう一度具体的に入力してください"}, 
+                    yield {"event": "error",
+                           "data": json.dumps({"event": "error", "error":"質問の内容が確認できません。もう一度具体的に入力してください"},
                             ensure_ascii=False)}
                     return
-            
+
                 print(f"2.提取成功: {search_keywords}，正在搜尋資料庫...")
                 search_results = await retrieval_agent.search_by_keywords(search_keywords)
-                
+
                 print(f"搜尋完成，結果數量: {len(search_results)}")
 
                 final_agent = FinalAgent()
-        
+
                 async for chunk in final_agent.generate_answer_stream(request.input, search_results):
                     if await raw_request.is_disconnected():
                         break
@@ -368,9 +374,9 @@ async def telsurvey_checkextension(request: InputParserRequest, raw_request: Req
                     if "[DONE]" in chunk:
                         data_payload = json.dumps({"event": "done"}, ensure_ascii=False)
                         yield {"event": "done", "data": data_payload}
-                    else: 
+                    else:
                         data_payload = json.dumps({"event": "text_chunk","message": chunk}, ensure_ascii=False)
-                        yield {"event": "text_chunk", "data": data_payload}                
+                        yield {"event": "text_chunk", "data": data_payload}
                 print("串流結束。")
             except Exception as e:
                 print(f"產生器內部報錯: {e}")
@@ -385,7 +391,7 @@ async def telsurvey_checkextension(request: InputParserRequest, raw_request: Req
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok"} 
+    return {"status": "ok"}
 # 測試用
 if __name__ == "__main__":
     #uvicorn.run(app, host="0.0.0.0", port=3005)
@@ -397,7 +403,7 @@ if __name__ == "__main__":
     parser.add_argument("--ollama_uri", type=str, default="http://127.0.0.1:11434")
     #parser.add_argument("--ollama_model", type=str, default="gemma3:4b")
     parser.add_argument("--ollama_model", type=str, default="gemma2:2b")
-    
+
     parser.add_argument("--max_neighbor_search", type=int, default=30)
     #parser.add_argument("--max_l2_distance", type=float, default=1.0) # make it larger than 1 to disable filter (for gemini)
     parser.add_argument("--max_l2_distance", type=float, default=10) # make it larger than 1 to disable filter (for qwen3)
@@ -405,28 +411,28 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     uvicorn.run(app, host=args.host, port=args.port)
-    
+
     '''
     async def test():
         print("=== Retrieval Agent 測試 ===\n")
-        
+
         queries = [
             "我要找遠藤和也"
         ]
-        
+
         for query in queries:
             print(f"\n{'='*50}")
             print(f"查詢：{query}")
             print('='*50)
-            
+
             results = await retrieve_phone_number(query=query)
-            
+
             print(f"\n結果：")
             for r in results:
                 if 'error' not in r:
                     print(f'  ✓ Rank {r["rank"]}, Score: {r["score"]:.4f}')
                     print(r['entity'].get('text', ''))
-    
+
     asyncio.run(test())
     '''
     '''
@@ -440,19 +446,19 @@ if __name__ == "__main__":
     # 帶回呼的串流
     async def test_stream_callback():
         agent = StreamingRetrievalAgent()
-        
+
         async def on_token(content: str):
             print(content, end="", flush=True)
-        
+
         async def on_thinking(content: str):
             print(f"\n[思考] {content}", end="", flush=True)
-        
+
         async def on_done():
             print("\n✓ 完成")
-        
+
         async def on_error(message: str):
             print(f"\n✗ 錯誤：{message}")
-        
+
         results = await agent.search_stream_with_callback(
             user_query="我要找遠藤和也",
             token_callback=on_token,
@@ -460,18 +466,18 @@ if __name__ == "__main__":
             done_callback=on_done,
             error_callback=on_error
         )
-        
+
         #print(f"結果：{results}")
-        
+
         # Step 2: Final Answer
         final_agent = FinalAgent()
         final_answer = await final_agent.generate_answer(
             user_question="我要找遠藤和也",
             search_results=results
         )
-   
+
         print(final_answer)
-        
+
         agent.close()
     asyncio.run(test_stream_callback())
     '''
