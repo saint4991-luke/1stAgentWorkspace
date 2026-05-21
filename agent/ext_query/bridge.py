@@ -354,6 +354,15 @@ async def chat_endpoint(request: Request):
                 if response.status_code == 200:
                     data = response.json()
                     messages = data.get("messages", [])
+                elif response.status_code == 404 or (response.status_code == 200 and response.json().get("service_code") == "69711001"):
+                    # Session 不存在
+                    print(f"⚠️ Session 不存在：{session_id}")
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Session expired or invalid. Please re-initialize session."
+                    )
+            except HTTPException:
+                raise
             except Exception as e:
                 print(f"⚠️ 獲取對話歷史失敗：{e}")
             
