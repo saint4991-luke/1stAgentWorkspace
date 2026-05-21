@@ -2,7 +2,7 @@
 bridge.py - Session + ext_query 橋接服務
 
 整合：
-- session/ 模組（Session 管理）
+- RESTful API Session 管理（遠端 nagato 服務）
 - ext_query/ 模組（電話號碼查詢）
 
 API 端點（根據 AIJPDNC-QueryRESTAPIforDNC-110526-1134-192.pdf 規範）:
@@ -18,6 +18,7 @@ import os
 import sys
 from pathlib import Path
 from contextlib import asynccontextmanager
+import httpx
 
 # 添加父目錄到 Python 路徑，以便導入 session 模組
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -30,18 +31,10 @@ import json
 import time
 
 # 環境變數配置
-SESSION_DB_PATH = os.getenv("SESSION_DB_PATH", "/data/sessions.db")
-USER_ID_HEADER = os.getenv("USER_ID_HEADER", "X-User-ID")
+NAGATO_BASE_URL = os.getenv("NAGATO_BASE_URL", "https://ubibos-preview.ubitus.ai/nagato/api/v1")
+NAGATO_TENANT = os.getenv("NAGATO_TENANT", "dnc")
 BRIDGE_HOST = os.getenv("BRIDGE_HOST", "0.0.0.0")
 BRIDGE_PORT = int(os.getenv("BRIDGE_PORT", "3006"))
-
-# 導入 session 模組
-try:
-    from session.session_store import SessionStore, get_session_store
-    SESSION_AVAILABLE = True
-except ImportError as e:
-    print(f"⚠️ 警告：無法導入 session 模組：{e}")
-    SESSION_AVAILABLE = False
 
 # 導入 ext_query 模組（同目錄）
 try:
@@ -53,23 +46,14 @@ except ImportError as e:
     EXT_QUERY_AVAILABLE = False
 
 # 全局變數
-store: Optional[SessionStore] = None
 retrieval_agent: Optional[RetrievalAgent] = None
 final_agent: Optional[FinalAgent] = None
+http_client: Optional[httpx.AsyncClient] = None
 
 
 def initialize_modules():
     """初始化所有模組"""
-    global store, retrieval_agent, final_agent
-    
-    # 初始化 Session Store
-    if SESSION_AVAILABLE:
-        try:
-            store = get_session_store(db_path=SESSION_DB_PATH)
-            print(f"✅ SessionStore 初始化完成 ({SESSION_DB_PATH})")
-        except Exception as e:
-            print(f"❌ SessionStore 初始化失敗：{e}")
-            store = None
+    global retrieval_agent, final_agent
     
     # 初始化 Retrieval Agent
     if EXT_QUERY_AVAILABLE:
@@ -79,7 +63,9 @@ def initialize_modules():
         except Exception as e:
             print(f"❌ RetrievalAgent 初始化失敗：{e}")
             retrieval_agent = None
-        
+    
+    # 初始化 Final Agent
+    if EXT_QUERY_AVAILABLE:
         try:
             final_agent = FinalAgent()
             print("✅ FinalAgent 初始化完成")
@@ -88,106 +74,169 @@ def initialize_modules():
             final_agent = None
 
 
+async def initialize_http_client():
+    """初始化 HTTP 客戶端"""
+    global http_client
+    http_client = httpx.AsyncClient(
+        base_url=NAGATO_BASE_URL,
+        timeout=30.0
+    )
+    print(f"✅ HTTP Client 初始化完成 ({NAGATO_BASE_URL})")
+
+
+async def close_http_client():
+    """關閉 HTTP 客戶端"""
+    global http_client
+    if http_client:
+        await http_client.aclose()
+        print("✅ HTTP Client 已關閉")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Lifespan 事件處理器（替代 @app.on_event("startup")）
-    
-    FastAPI 推薦的方式：https://fastapi.tiangolo.com/advanced/events/
-    """
-    # 啟動時執行
-    print("🦐 ExtQuery Bridge 啟動中...")
+    """FastAPI 生命週期管理"""
+    # 啟動時
     initialize_modules()
+    await initialize_http_client()
     yield
-    # 關閉時執行（清理資源）
-    print("👋 ExtQuery Bridge 關閉中...")
+    # 關閉時
+    await close_http_client()
 
 
-# 初始化 FastAPI 應用
-app = FastAPI(
-    title="ExtQuery Bridge",
-    description="Session + ext_query 整合服務 - 電話號碼查詢系統",
-    version="1.0.0",
-    lifespan=lifespan
-)
+app = FastAPI(title="Check Extension Bridge API Server", description="提供 Session 管理與電話號碼資料庫查詢的 API 接口", lifespan=lifespan)
 
+
+# ==================== Session 管理 ====================
 
 @app.get("/session")
 async def create_session():
     """
-    創建 Session（初始化會話環境）
+    創建 Session（符合規範 Section 1.1）
     
-    根據規範 AIJPDNC-QueryRESTAPIforDNC-110526-1134-192.pdf Section 1.1
+    調用遠端 nagato 服務創建 session
     
-    HTTP Method: GET
-    Response Content-Type: application/json
-    
-    Response Headers:
-    - Set-Cookie: session_id=EXT_...; HttpOnly; SameSite=Lax; Path=/
-    
-    Response Body:
+    Response:
     {
-        "event": "done",
-        "message": {
-            "session_id": "EXT_4e5c693f-7a30-4452-a902-792e64cb6a6e",
-            "metadata": {},
-            "created_at": "2026-05-08T03:19:12.224206",
-            "last_active": "2026-05-08T03:19:12.224206",
-            "ttl_hours": 24
-        },
-        "created": 1778210352,
-        "id": "EXT_4e5c693f-7a30-4452-a902-792e64cb6a6e_1778210352",
-        "timing": {
-            "total_ms": 2
-        }
+        "sessionId": "0QENXBMJVRHV6",
+        "metadata": {},
+        "created_at": 1778211058,
+        "last_active": 1778211058,
+        "ttl_hours": 24
     }
     """
-    if not SESSION_AVAILABLE or not store:
-        raise HTTPException(status_code=503, detail="Session module not available")
-    
-    # 創建新 Session
-    session_data = store.create_session(
-        prefix="EXT",
-        metadata={},
-        ttl_hours=24
-    )
-    
-    session_id = session_data['session_id']
-    created = int(time.time())
-    
-    print(f"🆕 創建新 Session: {session_id}")
-    
-    # 構建響應（符合規範格式）
-    response_data = {
-        "event": "done",
-        "message": {
-            "session_id": session_id,
-            "metadata": session_data.get('metadata', {}),
-            "created_at": session_data['created_at'],
-            "last_active": session_data['last_active'],
-            "ttl_hours": session_data['ttl_hours']
-        },
-        "created": created,
-        "id": f"{session_id}_{created}",
-        "timing": {
-            "total_ms": 1  # 創建操作非常快
+    try:
+        # 調用遠端 API 創建 session
+        response = await http_client.post(
+            f"/tenants/{NAGATO_TENANT}/sessions",
+            json={}
+        )
+        response.raise_for_status()
+        session_data = response.json()
+        
+        session_id = session_data.get("sessionId")
+        created = int(time.time())
+        
+        print(f"🆕 創建 Session: {session_id}")
+        
+        # 構建響應（符合規範格式）
+        response_data = {
+            "event": "done",
+            "message": {
+                "session_id": session_id,
+                "metadata": session_data.get('metadata', {}),
+                "created_at": session_data.get('created_at', created),
+                "last_active": session_data.get('last_active', created),
+                "ttl_hours": session_data.get('ttl_hours', 24)
+            },
+            "created": created,
+            "id": f"{session_id}_{created}",
+            "timing": {
+                "total_ms": 1
+            }
         }
-    }
-    
-    # 創建 JSONResponse 並設置 cookie
-    response = JSONResponse(content=response_data)
-    
-    # 設置 Session ID Cookie（符合規範）
-    response.set_cookie(
-        key="session_id",
-        value=session_id,
-        httponly=True,
-        samesite="lax",
-        path="/"
-    )
-    
-    return response
+        
+        # 創建 JSONResponse 並設置 cookie
+        response = JSONResponse(content=response_data)
+        
+        # 設置 Session ID Cookie（符合規範）
+        response.set_cookie(
+            key="session_id",
+            value=session_id,
+            httponly=True,
+            samesite="lax",
+            path="/"
+        )
+        
+        return response
+        
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=f"Failed to create session: {e}")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Service unavailable: {e}")
 
+
+@app.get("/session/{session_id}")
+async def get_session(session_id: str):
+    """
+    獲取 Session 詳情
+    
+    調用遠端 nagato 服務獲取 session 詳情
+    """
+    try:
+        response = await http_client.get(
+            f"/tenants/{NAGATO_TENANT}/sessions/{session_id}"
+        )
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=e.response.status_code, detail=f"Failed to get session: {e}")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Service unavailable: {e}")
+
+
+@app.get("/sessions")
+async def list_sessions():
+    """
+    獲取所有活躍 Session
+    
+    調用遠端 nagato 服務獲取 sessions 列表
+    """
+    try:
+        response = await http_client.get(
+            f"/tenants/{NAGATO_TENANT}/sessions"
+        )
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=f"Failed to list sessions: {e}")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Service unavailable: {e}")
+
+
+@app.delete("/session/{session_id}")
+async def delete_session(session_id: str):
+    """
+    刪除 Session
+    
+    調用遠端 nagato 服務刪除 session
+    """
+    try:
+        response = await http_client.delete(
+            f"/tenants/{NAGATO_TENANT}/sessions/{session_id}"
+        )
+        response.raise_for_status()
+        return {"status": "ok", "message": f"Session {session_id} deleted"}
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=e.response.status_code, detail=f"Failed to delete session: {e}")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Service unavailable: {e}")
+
+
+# ==================== Health Check ====================
 
 @app.get("/health")
 async def health_check():
@@ -199,11 +248,13 @@ async def health_check():
     return {
         "status": "ok",
         "modules": {
-            "session": "ready" if SESSION_AVAILABLE and store else "not available",
-            "ext_query": "ready" if EXT_QUERY_AVAILABLE and retrieval_agent and final_agent else "not available"
+            "ext_query": "ready" if EXT_QUERY_AVAILABLE and retrieval_agent and final_agent else "not available",
+            "nagato_api": "ready" if http_client else "not available"
         }
     }
 
+
+# ==================== Chat Endpoint ====================
 
 @app.post("/chat")
 async def chat_endpoint(request: Request):
@@ -240,30 +291,23 @@ async def chat_endpoint(request: Request):
     Body: {"detail": "Session expired or invalid. Please re-initialize session."}
     """
     # 檢查模組就緒狀態
-    if not SESSION_AVAILABLE or not store:
-        raise HTTPException(status_code=503, detail="Session module not available")
-    
     if not EXT_QUERY_AVAILABLE or not retrieval_agent or not final_agent:
         raise HTTPException(status_code=503, detail="ext_query module not available")
+    
+    if not http_client:
+        raise HTTPException(status_code=503, detail="Nagato API client not available")
     
     # 1. Session 管理（檢查 cookie 中的 session_id）
     session_id = request.cookies.get("session_id")
     
-    # 如果沒有 session_id 或 session 不存在，返回 401（符合規範）
+    # 如果沒有 session_id，返回 401（符合規範）
     if not session_id:
         raise HTTPException(
             status_code=401,
             detail="Session expired or invalid. Please re-initialize session."
         )
     
-    session = store.get_session(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=401,
-            detail="Session expired or invalid. Please re-initialize session."
-        )
-    
-    print(f"🔄 使用現有 Session: {session_id}")
+    print(f"🔄 使用 Session: {session_id}")
     
     # 3. 獲取用戶問題
     try:
@@ -273,11 +317,21 @@ async def chat_endpoint(request: Request):
         raise HTTPException(status_code=400, detail="Invalid JSON body")
     
     if not user_query:
-        raise HTTPException(status_code=400, detail="Missing 'query' in request body")
+        raise HTTPException(status_code=400, detail="Missing 'input' in request body")
     
-    # 4. 記錄用戶問題
-    store.add_message(session_id, role="user", content=user_query)
-    print(f"💬 [Session: {session_id}] User: {user_query}")
+    # 4. 記錄用戶問題（調用遠端 API）
+    try:
+        await http_client.post(
+            f"/tenants/{NAGATO_TENANT}/sessions/{session_id}/messages",
+            json={
+                "messages": [
+                    {"role": "user", "content": user_query}
+                ]
+            }
+        )
+        print(f"💬 [Session: {session_id}] User: {user_query}")
+    except Exception as e:
+        print(f"⚠️ 記錄用戶消息失敗：{e}")
     
     # 5. ext_query 判斷流程
     async def event_generator():
@@ -291,8 +345,18 @@ async def chat_endpoint(request: Request):
         event_id = f"{session_id}_{created}"
         
         try:
-            # 獲取對話歷史（用於判斷是否需要檢索）
-            messages = store.get_messages(session_id)
+            # 獲取對話歷史（調用遠端 API）
+            messages = []
+            try:
+                response = await http_client.get(
+                    f"/tenants/{NAGATO_TENANT}/sessions/{session_id}/messages"
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    messages = data.get("messages", [])
+            except Exception as e:
+                print(f"⚠️ 獲取對話歷史失敗：{e}")
+            
             conversation_history = {"user": [], "assistant": []}
             for msg in messages:
                 if msg["role"] == "user":
@@ -300,7 +364,7 @@ async def chat_endpoint(request: Request):
                 elif msg["role"] == "assistant":
                     conversation_history["assistant"].append(msg["content"])
             
-            # Step A: 判斷是否需要查詢（傳入對話歷史）
+            # Step A: 判斷意圖（傳入對話歷史）
             print(f"🔍 [Session: {session_id}] 判斷意圖...")
             keywords, display, is_ignore, search_result = await retrieval_agent.extract_keywords_from_query(
                 user_query, 
@@ -347,159 +411,66 @@ async def chat_endpoint(request: Request):
                     # SSE 格式：text_chunk（扁平結構）
                     yield f"event: text_chunk\ndata: {json.dumps({'event': 'text_chunk', 'message': chunk, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
             
-            # Step D: 記錄系統回答
+            # Step D: 記錄系統回答（調用遠端 API）
             if full_answer:
-                store.add_message(session_id, role="assistant", content=full_answer)
-                print(f"💬 [Session: {session_id}] Assistant: {full_answer[:50]}...")
+                try:
+                    await http_client.post(
+                        f"/tenants/{NAGATO_TENANT}/sessions/{session_id}/messages",
+                        json={
+                            "messages": [
+                                {"role": "assistant", "content": full_answer}
+                            ]
+                        }
+                    )
+                    print(f"💬 [Session: {session_id}] Assistant: {full_answer[:50]}...")
+                except Exception as e:
+                    print(f"⚠️ 記錄助手消息失敗：{e}")
             
             # 計算計時數據
             end_time = time.time()
             timing = {
+                "start_ms": int(start_time * 1000),
+                "end_ms": int(end_time * 1000),
                 "total_ms": int((end_time - start_time) * 1000)
             }
             
-            # Step E: 完成（SSE 格式：done）
+            # 完成事件（符合規範格式）
             yield f"event: done\ndata: {json.dumps({'event': 'done', 'created': created, 'id': event_id, 'timing': timing}, ensure_ascii=False, separators=(',', ':'))}\n\n"
             
-            # Step F: [DONE] 標記（規範要求）
+            # [DONE] 標記（符合規範）
             yield "data: [DONE]\n\n"
             
         except Exception as e:
             print(f"❌ [Session: {session_id}] 錯誤：{e}")
-            error_message = str(e)
+            error_time = int(time.time())
+            error_id = f"{session_id}_{error_time}"
             
-            # SSE 格式：error
-            yield f"event: error\ndata: {json.dumps({'event': 'error', 'error': error_message, 'created': created, 'id': event_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
-            
-            # Step F: [DONE] 標記（錯誤情況）
+            # 錯誤事件
+            yield f"event: error\ndata: {json.dumps({'event': 'error', 'message': str(e), 'created': error_time, 'id': error_id}, ensure_ascii=False, separators=(',', ':'))}\n\n"
             yield "data: [DONE]\n\n"
-            
-            # 記錄錯誤到 Session
-            store.add_message(session_id, role="assistant", content=f"錯誤：{error_message}")
     
-    # 6. SSE 串流返回（需要自定義 Response 以支持 cookie）
-    from starlette.responses import StreamingResponse
-    from starlette import status
+    # 返回 SSE 串流（使用 StreamingResponse）
+    from fastapi.responses import StreamingResponse
     
-    # 創建 StreamingResponse 並設置 cookie
     response = StreamingResponse(
         event_generator(),
-        media_type="text/event-stream",
-        status_code=status.HTTP_200_OK
+        media_type="text/event-stream; charset=utf-8"
     )
     
-    # 設置 Session ID Cookie
-    response.set_cookie(
-        key="session_id",
-        value=session_id,
-        max_age=86400,  # 24 小時
-        httponly=True,
-        samesite="lax",
-        path="/"
-    )
+    # 設置 Cache-Control（符合規範）
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["Connection"] = "keep-alive"
     
     return response
 
 
-@app.get("/session/{session_id}")
-async def get_session_info(session_id: str):
-    """
-    獲取 Session 詳情（用於除錯）
-    
-    返回完整的 Session 資訊，包含對話歷史。
-    """
-    if not SESSION_AVAILABLE or not store:
-        raise HTTPException(status_code=503, detail="Session module not available")
-    
-    session = store.get_session(session_id)
-    
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    return session
+# ==================== Main ====================
 
-
-@app.get("/sessions")
-async def list_sessions():
-    """
-    獲取所有活躍 Session 列表
-    
-    返回未過期的 Session 摘要資訊。
-    """
-    if not SESSION_AVAILABLE or not store:
-        raise HTTPException(status_code=503, detail="Session module not available")
-    
-    sessions = store.list_sessions()
-    
-    return {
-        "count": len(sessions),
-        "sessions": sessions
-    }
-
-
-@app.delete("/session/{session_id}")
-async def delete_session(session_id: str):
-    """
-    刪除 Session
-    
-    刪除指定的 Session 及其所有對話歷史。
-    """
-    if not SESSION_AVAILABLE or not store:
-        raise HTTPException(status_code=503, detail="Session module not available")
-    
-    success = store.delete_session(session_id)
-    
-    if not success:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    return {
-        "success": True,
-        "message": f"Session {session_id} deleted"
-    }
-
-
-@app.get("/")
-async def root():
-    """
-    根路徑 - API 資訊
-    """
-    return {
-        "name": "ExtQuery Bridge",
-        "version": "1.0.0",
-        "description": "Session + ext_query 整合服務（符合 AIJPDNC-QueryRESTAPIforDNC 規範）",
-        "endpoints": {
-            "GET /session": "創建 Session（初始化會話環境）",
-            "POST /chat": "聊天查詢（SSE 串流）",
-            "GET /session/{session_id}": "獲取 Session 詳情（除錯用）",
-            "GET /sessions": "獲取所有活躍 Session",
-            "DELETE /session/{session_id}": "刪除 Session",
-            "GET /health": "健康檢查"
-        },
-        "specification": "docs/03_specs/AIJPDNC-QueryRESTAPIforDNC-110526-1134-192.pdf"
-    }
-
-
-# 主程式入口
 if __name__ == "__main__":
     import uvicorn
     
-    print("=" * 60)
-    print("🦐 ExtQuery Bridge 啟動中...")
-    print("=" * 60)
-    print(f"📍 Host: {BRIDGE_HOST}")
-    print(f"🔌 Port: {BRIDGE_PORT}")
-    print(f"💾 Session DB: {SESSION_DB_PATH}")
-    print(f"📜 規範：AIJPDNC-QueryRESTAPIforDNC-110526-1134-192.pdf")
-    print("=" * 60)
-    print("API 端點:")
-    print("  GET  /session - 創建 Session")
-    print("  POST /chat    - 聊天查詢（SSE 串流）")
-    print("  GET  /health  - 健康檢查")
-    print("=" * 60)
+    print("🚀 啟動 Bridge API Server...")
+    print(f"📍 Host: {BRIDGE_HOST}:{BRIDGE_PORT}")
+    print(f"🔗 Nagato API: {NAGATO_BASE_URL}/tenants/{NAGATO_TENANT}")
     
-    uvicorn.run(
-        app,
-        host=BRIDGE_HOST,
-        port=BRIDGE_PORT,
-        log_level="info"
-    )
+    uvicorn.run(app, host=BRIDGE_HOST, port=BRIDGE_PORT)
