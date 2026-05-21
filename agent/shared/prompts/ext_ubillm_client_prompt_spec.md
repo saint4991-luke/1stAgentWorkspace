@@ -152,7 +152,15 @@ Agent 可以使用以下 **2 個工具**：
 }]
 ```
 
-#### 情況 B：特殊情況（社長/松雅彦）
+#### 情況 B：特殊情況（高階職位/特定部門）
+
+**適用關鍵詞：**
+- **社長**（公司總裁）
+- **松雅彦**（特定人員）
+- **東日本支店**（特定部門）
+- **役員室**（高管辦公室）
+- **監査役**（審計員）
+- **取締役**（董事）
 
 **格式：**
 ```json
@@ -175,12 +183,13 @@ Agent 可以使用以下 **2 個工具**：
 - ✅ `y` 為指引用戶聯繫的文字
 - ✅ `search_result` 包含聯絡人的結構化資訊
 - ✅ 必須包含 6 個欄位：部門、課、役職、姓氏、名字、内線番号
+- ✅ 當用戶查詢上述關鍵詞時，統一返回指定回應
 
 **範例：**
 ```json
 [{
-    "context_reasoning": "The user is asking about 社長 or 松雅彦。This is a special case that requires a predefined response.",
-    "tool_reasoning": "For queries about 社長 or 松雅彦，I will use ignore_retrieve with a predefined response and structured contact information.",
+    "context_reasoning": "The user is asking about 社長，東日本支店，役員室，監査役，or 取締役。This is a special case that requires a predefined response.",
+    "tool_reasoning": "For queries about high-level positions or specific departments, I will use ignore_retrieve with a predefined response directing to 山崎節子.",
     "tool": "ignore_retrieve",
     "tool_input": {"x": ""},
     "tool_display": {
