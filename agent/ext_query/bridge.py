@@ -31,8 +31,8 @@ import json
 import time
 
 # 環境變數配置
-NAGATO_BASE_URL = os.getenv("NAGATO_BASE_URL", "https://ubibos-preview.ubitus.ai/nagato/api/v1")
-NAGATO_TENANT = os.getenv("NAGATO_TENANT", "dnc")
+NAGATO_BASE_URL = os.getenv("NAGATO_BASE_URL", "http://140.227.187.126:6480/api/v1")
+NAGATO_HOST = os.getenv("NAGATO_HOST", "scroll.gc.ubicloud.net")
 BRIDGE_HOST = os.getenv("BRIDGE_HOST", "0.0.0.0")
 BRIDGE_PORT = int(os.getenv("BRIDGE_PORT", "3006"))
 
@@ -127,8 +127,9 @@ async def create_session():
     try:
         # 調用遠端 API 創建 session
         response = await http_client.post(
-            f"/tenants/{NAGATO_TENANT}/sessions",
-            json={}
+            "/sessions",
+            json={},
+            headers={"Host": NAGATO_HOST}
         )
         response.raise_for_status()
         session_data = response.json()
@@ -184,7 +185,8 @@ async def get_session(session_id: str):
     """
     try:
         response = await http_client.get(
-            f"/tenants/{NAGATO_TENANT}/sessions/{session_id}"
+            f"/sessions/{session_id}",
+            headers={"Host": NAGATO_HOST}
         )
         response.raise_for_status()
         return response.json()
@@ -205,7 +207,8 @@ async def list_sessions():
     """
     try:
         response = await http_client.get(
-            f"/tenants/{NAGATO_TENANT}/sessions"
+            "/sessions",
+            headers={"Host": NAGATO_HOST}
         )
         response.raise_for_status()
         return response.json()
@@ -224,7 +227,8 @@ async def delete_session(session_id: str):
     """
     try:
         response = await http_client.delete(
-            f"/tenants/{NAGATO_TENANT}/sessions/{session_id}"
+            f"/sessions/{session_id}",
+            headers={"Host": NAGATO_HOST}
         )
         response.raise_for_status()
         return {"status": "ok", "message": f"Session {session_id} deleted"}
@@ -322,12 +326,13 @@ async def chat_endpoint(request: Request):
     # 4. 記錄用戶問題（調用遠端 API）
     try:
         await http_client.post(
-            f"/tenants/{NAGATO_TENANT}/sessions/{session_id}/messages",
+            f"/sessions/{session_id}/messages",
             json={
                 "messages": [
                     {"role": "user", "content": user_query}
                 ]
-            }
+            },
+            headers={"Host": NAGATO_HOST}
         )
         print(f"💬 [Session: {session_id}] User: {user_query}")
     except Exception as e:
@@ -349,7 +354,8 @@ async def chat_endpoint(request: Request):
             messages = []
             try:
                 response = await http_client.get(
-                    f"/tenants/{NAGATO_TENANT}/sessions/{session_id}/messages"
+                    f"/sessions/{session_id}/messages",
+                    headers={"Host": NAGATO_HOST}
                 )
                 if response.status_code == 200:
                     data = response.json()
@@ -424,12 +430,13 @@ async def chat_endpoint(request: Request):
             if full_answer:
                 try:
                     await http_client.post(
-                        f"/tenants/{NAGATO_TENANT}/sessions/{session_id}/messages",
+                        f"/sessions/{session_id}/messages",
                         json={
                             "messages": [
                                 {"role": "assistant", "content": full_answer}
                             ]
-                        }
+                        },
+                        headers={"Host": NAGATO_HOST}
                     )
                     print(f"💬 [Session: {session_id}] Assistant: {full_answer[:50]}...")
                 except Exception as e:
