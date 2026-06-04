@@ -50,6 +50,13 @@ retrieval_agent: Optional[RetrievalAgent] = None
 final_agent: Optional[FinalAgent] = None
 http_client: Optional[httpx.AsyncClient] = None
 
+# Session 自動清理配置
+SESSION_EXPIRY_HOURS = 12  # 12 小時過期
+SESSION_CLEANUP_INTERVAL = 1800  # 30 分鐘檢查一次（秒）
+
+# 內存 Session 記錄：{session_id: created_timestamp}
+session_created_at: Dict[str, float] = {}
+
 
 def initialize_modules():
     """初始化所有模組"""
@@ -92,14 +99,59 @@ async def close_http_client():
         print("✅ HTTP Client 已關閉")
 
 
+async def cleanup_expired_sessions():
+    """
+    背景任務：定期清理過期的 Session
+    
+    每 30 分鐘檢查一次，刪除超過 12 小時的 session
+    """
+    import asyncio
+    
+    while True:
+        await asyncio.sleep(SESSION_CLEANUP_INTERVAL)  # 等待 30 分鐘
+        
+        current_time = time.time()
+        expiry_seconds = SESSION_EXPIRY_HOURS * 3600  # 12 小時 = 43200 秒
+        expired_sessions = []
+        
+        # 找出過期的 session
+        for session_id, created_at in session_created_at.items():
+            if current_time - created_at > expiry_seconds:
+                expired_sessions.append(session_id)
+        
+        # 刪除過期的 session
+        if expired_sessions:
+            print(f"🧹 發現 {len(expired_sessions)} 個過期 session，開始清理...")
+            for session_id in expired_sessions:
+                try:
+                    await delete_session(session_id)
+                    del session_created_at[session_id]
+                    print(f"✅ 已刪除過期 session: {session_id}")
+                except Exception as e:
+                    print(f"❌ 刪除 session {session_id} 失敗：{e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI 生命週期管理"""
+    import asyncio
+    
     # 啟動時
     initialize_modules()
     await initialize_http_client()
+    
+    # 啟動背景清理任務
+    cleanup_task = asyncio.create_task(cleanup_expired_sessions())
+    print(f"✅ Session 自動清理任務已啟動（每 {SESSION_CLEANUP_INTERVAL//60} 分鐘檢查，{SESSION_EXPIRY_HOURS}小時過期）")
+    
     yield
+    
     # 關閉時
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
     await close_http_client()
 
 
@@ -137,7 +189,9 @@ async def create_session():
         session_id = session_data.get("sessionId")
         created = int(time.time())
         
-        print(f"🆕 創建 Session: {session_id}")
+        # 記錄 session 創建時間（用於自動清理）
+        session_created_at[session_id] = time.time()
+        print(f"🆕 創建 Session: {session_id} (記錄創建時間：{created})")
         
         # 構建響應（符合規範格式）
         response_data = {
@@ -231,9 +285,17 @@ async def delete_session(session_id: str):
             headers={"Host": NAGATO_HOST}
         )
         response.raise_for_status()
+        
+        # 從內存記錄中移除
+        if session_id in session_created_at:
+            del session_created_at[session_id]
+        
         return {"status": "ok", "message": f"Session {session_id} deleted"}
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
+            # 從內存記錄中移除（如果存在）
+            if session_id in session_created_at:
+                del session_created_at[session_id]
             raise HTTPException(status_code=404, detail="Session not found")
         raise HTTPException(status_code=e.response.status_code, detail=f"Failed to delete session: {e}")
     except httpx.RequestError as e:
