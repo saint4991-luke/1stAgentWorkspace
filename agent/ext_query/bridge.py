@@ -23,7 +23,7 @@ import httpx
 # 添加父目錄到 Python 路徑，以便導入 session 模組
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Response
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from typing import Optional, Dict, Any
@@ -282,6 +282,8 @@ async def delete_session(session_id: str):
     API: DELETE /sessions/{session_id}
     Header: Host: scroll.gc.ubicloud.net
     
+    Response: 204 No Content (成功刪除，無返回內容)
+    
     Example:
     curl -X DELETE 'http://140.227.187.126:6480/api/v1/sessions/{session_id}' \
       --header 'Host: scroll.gc.ubicloud.net'
@@ -297,7 +299,8 @@ async def delete_session(session_id: str):
         if session_id in session_created_at:
             del session_created_at[session_id]
         
-        return {"status": "ok", "message": f"Session {session_id} deleted"}
+        # 返回 204 No Content（RESTful API 規範）
+        return Response(status_code=204)
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             # 從內存記錄中移除（如果存在）
