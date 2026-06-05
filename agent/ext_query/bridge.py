@@ -51,8 +51,8 @@ final_agent: Optional[FinalAgent] = None
 http_client: Optional[httpx.AsyncClient] = None
 
 # Session 自動清理配置
-SESSION_EXPIRY_MINUTES = 5  # 5 分鐘過期
-SESSION_CLEANUP_INTERVAL = 60  # 1 分鐘檢查一次（秒）
+SESSION_EXPIRY_HOURS = 12  # 12 小時過期
+SESSION_CLEANUP_INTERVAL = 1800  # 30 分鐘檢查一次（秒）
 
 # 內存 Session 記錄：{session_id: created_timestamp}
 session_created_at: Dict[str, float] = {}
@@ -103,15 +103,15 @@ async def cleanup_expired_sessions():
     """
     背景任務：定期清理過期的 Session
     
-    每 1 分鐘檢查一次，刪除超過 5 分鐘的 session
+    每 30 分鐘檢查一次，刪除超過 12 小時的 session
     """
     import asyncio
     
     while True:
-        await asyncio.sleep(SESSION_CLEANUP_INTERVAL)  # 等待 1 分鐘
+        await asyncio.sleep(SESSION_CLEANUP_INTERVAL)  # 等待 30 分鐘
         
         current_time = time.time()
-        expiry_seconds = SESSION_EXPIRY_MINUTES * 60  # 5 分鐘 = 300 秒
+        expiry_seconds = SESSION_EXPIRY_HOURS * 3600  # 12 小時 = 43200 秒
         expired_sessions = []
         
         # 找出過期的 session
@@ -142,7 +142,7 @@ async def lifespan(app: FastAPI):
     
     # 啟動背景清理任務
     cleanup_task = asyncio.create_task(cleanup_expired_sessions())
-    print(f"✅ Session 自動清理任務已啟動（每 {SESSION_CLEANUP_INTERVAL} 秒檢查，{SESSION_EXPIRY_MINUTES}分鐘過期）")
+    print(f"✅ Session 自動清理任務已啟動（每 {SESSION_CLEANUP_INTERVAL//60} 分鐘檢查，{SESSION_EXPIRY_HOURS}小時過期）")
     
     yield
     
