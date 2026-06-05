@@ -272,12 +272,19 @@ async def list_sessions():
         raise HTTPException(status_code=503, detail=f"Service unavailable: {e}")
 
 
-@app.delete("/session/{session_id}")
+@app.delete("/sessions/{session_id}")
 async def delete_session(session_id: str):
     """
     刪除 Session
     
     調用遠端 nagato 服務刪除 session
+    
+    API: DELETE /sessions/{session_id}
+    Header: Host: scroll.gc.ubicloud.net
+    
+    Example:
+    curl -X DELETE 'http://140.227.187.126:6480/api/v1/sessions/{session_id}' \
+      --header 'Host: scroll.gc.ubicloud.net'
     """
     try:
         response = await http_client.delete(
