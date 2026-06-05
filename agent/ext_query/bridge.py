@@ -125,7 +125,7 @@ async def cleanup_expired_sessions():
             for session_id in expired_sessions:
                 try:
                     await delete_session(session_id)
-                    del session_created_at[session_id]
+                    # del session_created_at[session_id]  # 已移除：delete_session 內部會處理
                     print(f"✅ 已刪除過期 session: {session_id}")
                 except Exception as e:
                     print(f"❌ 刪除 session {session_id} 失敗：{e}")
