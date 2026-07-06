@@ -188,11 +188,14 @@ class FinalAgent:
                 "Authorization": self.auth_key
             }
             
-            # 修改：將 formatted_results 獨立為 "role": "tool"
             messages = [
                 {"role": "system", "content": system_prompt},
-                {"role": "tool", "content": formatted_results},
-                {"role": "user", "content": f"ユーザーの質問：{user_question}\n\n上記の情報に基づいて、最終的な回答を生成してください。"}
+                {"role": "user", "content": f"""ユーザーの質問：{user_question}
+
+検索結果：
+{formatted_results}
+
+上記の情報に基づいて、最終的な回答を生成してください。"""}
             ]
 
         payload = {
