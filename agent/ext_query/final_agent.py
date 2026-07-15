@@ -207,7 +207,8 @@ class FinalAgent:
                 "messages": messages,
                 "temperature": 0.1,
                 "max_tokens": 500,
-                "stream": True
+                "stream": True,
+                "enable_thinking": False
             }
 
             headers = {
