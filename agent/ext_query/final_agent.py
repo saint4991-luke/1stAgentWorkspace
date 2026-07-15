@@ -24,6 +24,7 @@ PROMPT_FILE = Path(__file__).parent.parent / "shared" / "prompts" / "ext_final_a
 UBIGPT_FQDN = os.getenv("UBIGPT_FQDN", "https://g.ubitus.ai/v1/chat/completions")
 UBIGPT_AUTH_KEY = os.getenv("UBIGPT_AUTH_KEY", "Bearer +5/tIEiUce9skGhe+mPt6AjL7TPY2kAvKNzvcilblHc73FAndMfH5EICwOSHPLbB3qN85eGTFlEGwJBItrQVcg==")
 UBIGPT_MODEL = os.getenv("UBIGPT_MODEL", "llama-4-maverick-fp8")
+UBILLM_MODEL = os.getenv("UBILLM_MODEL", "qwen3-8b-fp8")
 FINAL_AGENT_USE_UBILLM = os.getenv("FINAL_AGENT_USE_UBILLM", "0") in ("1", "true", "True")
 
 
@@ -193,16 +194,16 @@ class FinalAgent:
             ]
 
         try:
-            # Stage 1: 獲取 token
-            grant_data = await ubillm_client.grant_token(model=self.model, type="llm")
+            # Stage 1: 獲取 token（使用 UBILLM_MODEL）
+            grant_data = await ubillm_client.grant_token(model=UBILLM_MODEL, type="llm")
             token = grant_data["api_token"]
             endpoint = grant_data["api_endpoint"]
-            print(f"[uBillm grant] endpoint={endpoint}")
+            print(f"[uBillm grant] endpoint={endpoint}, model={UBILLM_MODEL}")
 
             # Stage 2: 串流呼叫 chat_completions
             url = f"{endpoint}/v1/chat/completions"
             payload = {
-                "model": self.model,
+                "model": UBILLM_MODEL,
                 "messages": messages,
                 "temperature": 0.1,
                 "max_tokens": 500,
