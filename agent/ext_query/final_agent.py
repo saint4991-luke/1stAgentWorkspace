@@ -236,9 +236,14 @@ class FinalAgent:
                                 content_holder = choice.get("delta") or choice.get("message")
 
                                 if content_holder:
+                                    # 先嘗試抓取 content；若模型仍輸出 reasoning 則 fallback
                                     content = content_holder.get("content", "")
                                     if content:
                                         yield content
+                                    else:
+                                        reasoning = content_holder.get("reasoning", "")
+                                        if reasoning:
+                                            yield reasoning
                         except json.JSONDecodeError:
                             continue
                         except Exception as e:
