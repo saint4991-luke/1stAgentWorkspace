@@ -208,7 +208,7 @@ class FinalAgent:
                 "temperature": 0.1,
                 "max_tokens": 500,
                 "stream": True,
-                "enable_thinking": False
+                "chat_template_kwargs": {"enable_thinking": False}
             }
 
             headers = {
