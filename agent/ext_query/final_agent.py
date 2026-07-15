@@ -2,6 +2,10 @@
 final_agent.py - 最終回答整理 Agent
 
 將 retrieval 結果和用戶問題傳給 LLM API，生成最終回答
+
+支援兩種 LLM 呼叫模式（透過 FINAL_AGENT_USE_UBILLM 環境變數切換）：
+  - 0/False（預設）：直接呼叫 UBIGPT（原有方式）
+  - 1/True：透過 uBillm grant_token → chat_completions 兩階段流程
 """
 
 import httpx
@@ -11,12 +15,16 @@ import re
 
 from typing import List, Dict, Any, Optional, AsyncGenerator, Union
 from pathlib import Path
+from fastapi import HTTPException
+
+from .ubillm_client import uBillmClient, UBILM_GRANT_URL, UBILM_API_KEY
 
 # 環境變數配置
 PROMPT_FILE = Path(__file__).parent.parent / "shared" / "prompts" / "ext_final_agent_prompt.txt"
 UBIGPT_FQDN = os.getenv("UBIGPT_FQDN", "https://g.ubitus.ai/v1/chat/completions")
 UBIGPT_AUTH_KEY = os.getenv("UBIGPT_AUTH_KEY", "Bearer +5/tIEiUce9skGhe+mPt6AjL7TPY2kAvKNzvcilblHc73FAndMfH5EICwOSHPLbB3qN85eGTFlEGwJBItrQVcg==")
 UBIGPT_MODEL = os.getenv("UBIGPT_MODEL", "llama-4-maverick-fp8")
+FINAL_AGENT_USE_UBILLM = os.getenv("FINAL_AGENT_USE_UBILLM", "0") in ("1", "true", "True")
 
 
 def load_system_prompt() -> str:
@@ -138,34 +146,152 @@ class FinalAgent:
             else:
                 return "申し訳ございませんが、回答を生成できませんでした。"
             
+    async def generate_answer_stream_ubillm(
+        self,
+        user_question: str,
+        search_results: Union[List[Dict[str, Any]], Dict]
+    ) -> AsyncGenerator[str, None]:
+        """
+        使用 uBillm grant_token → chat_completions 兩階段流程（串流模式）
+        """
+        print(f"3. generate_answer_stream (uBillm 模式)\n")
+        ubillm_client = uBillmClient()
+
+        # 判斷模式：ignore_retrieve 或正常搜尋
+        if isinstance(search_results, dict) and search_results.get("ignore_retrieve"):
+            print("📖 [Final Agent] ignore_retrieve 模式，使用對話歷史")
+            conversation_history = search_results.get("conversation_history", {})
+
+            history_text = ""
+            user_msgs = conversation_history.get("user", [])
+            assistant_msgs = conversation_history.get("assistant", [])
+            for user_msg, assistant_msg in zip(user_msgs, assistant_msgs):
+                history_text += f"User: {user_msg}\nAssistant: {assistant_msg}\n"
+
+            system_prompt = SYSTEM_PROMPT
+            system_prompt.replace("{question}", user_question)
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"""ユーザーの質問：{user_question}
+
+会話履歴：
+{history_text}
+
+上記の会話履歴から答えを抽出して、ユーザーの質問に直接回答してください。"""}
+            ]
+        else:
+            print("🔍 [Final Agent] 正常模式，使用搜尋結果")
+            formatted_results = self.format_search_results(search_results)
+
+            system_prompt = SYSTEM_PROMPT
+            system_prompt.replace("{question}", user_question)
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"ユーザーの質問：{user_question}\n\n検索結果：\n{formatted_results}\n\n上記の情報に基づいて、最終的な回答を生成してください。"}
+            ]
+
+        try:
+            # Stage 1: 獲取 token
+            grant_data = await ubillm_client.grant_token(model=self.model, type="llm")
+            token = grant_data["api_token"]
+            endpoint = grant_data["api_endpoint"]
+            print(f"[uBillm grant] endpoint={endpoint}")
+
+            # Stage 2: 串流呼叫 chat_completions
+            url = f"{endpoint}/v1/chat/completions"
+            payload = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": 0.1,
+                "max_tokens": 500,
+                "stream": True
+            }
+
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}"
+            }
+
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                async with client.stream("POST", url, headers=headers, json=payload) as response:
+                    async for line in response.aiter_lines():
+                        if not line or not line.startswith("data: "):
+                            continue
+
+                        data_str = line[6:].strip()
+                        if data_str == "[DONE]":
+                            yield "[DONE]"
+                            break
+
+                        try:
+                            data_json = json.loads(data_str)
+                            choices = data_json.get("choices", [])
+
+                            if choices:
+                                choice = choices[0]
+                                content_holder = choice.get("delta") or choice.get("message")
+
+                                if content_holder:
+                                    content = content_holder.get("content", "")
+                                    if content:
+                                        yield content
+                        except json.JSONDecodeError:
+                            continue
+                        except Exception as e:
+                            print(f"[uBillm stream] Parsing error: {e}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            yield f"uBillm Error: {str(e)}"
+
     async def generate_answer_stream(
         self,
         user_question: str,
         search_results: Union[List[Dict[str, Any]], Dict]
     ) -> AsyncGenerator[str, None]:
-        print(f"3. generate_answer_stream \n")
-        
+        """
+        串流生成最終回答，透過 FINAL_AGENT_USE_UBILLM 環境變數切換模式：
+          - 0/False（預設）：直接呼叫 UBIGPT
+          - 1/True：使用 uBillm grant_token → chat_completions
+        """
+        if FINAL_AGENT_USE_UBILLM:
+            async for chunk in self.generate_answer_stream_ubillm(user_question, search_results):
+                yield chunk
+        else:
+            async for chunk in self._generate_answer_stream_direct(user_question, search_results):
+                yield chunk
+
+    async def _generate_answer_stream_direct(
+        self,
+        user_question: str,
+        search_results: Union[List[Dict[str, Any]], Dict]
+    ) -> AsyncGenerator[str, None]:
+        """原始串流方法（直接呼叫 UBIGPT，原有邏輯）"""
+        print(f"3. generate_answer_stream (直接模式)\n")
+
         # 判斷模式：ignore_retrieve 或正常搜尋
         if isinstance(search_results, dict) and search_results.get("ignore_retrieve"):
             # ignore_retrieve 模式：使用對話歷史
             print("📖 [Final Agent] ignore_retrieve 模式，使用對話歷史")
             conversation_history = search_results.get("conversation_history", {})
-            
+
             # 格式化對話歷史
             history_text = ""
             user_msgs = conversation_history.get("user", [])
             assistant_msgs = conversation_history.get("assistant", [])
             for user_msg, assistant_msg in zip(user_msgs, assistant_msgs):
                 history_text += f"User: {user_msg}\nAssistant: {assistant_msg}\n"
-            
+
             system_prompt = SYSTEM_PROMPT
             system_prompt.replace("{question}", user_question)
-            
+
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": self.auth_key
             }
-            
+
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"""ユーザーの質問：{user_question}
@@ -179,15 +305,15 @@ class FinalAgent:
             # 正常模式：使用搜尋結果
             print("🔍 [Final Agent] 正常模式，使用搜尋結果")
             formatted_results = self.format_search_results(search_results)
-            
+
             system_prompt = SYSTEM_PROMPT
             system_prompt.replace("{question}", user_question)
-            
+
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": self.auth_key
             }
-            
+
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"""ユーザーの質問：{user_question}
@@ -215,26 +341,26 @@ class FinalAgent:
                     async for line in response.aiter_lines():
                         if not line or not line.startswith("data: "):
                             continue
-                        
+
                         data_str = line[6:].strip()
                         if data_str == "[DONE]":
                             yield "[DONE]"
                             break
-                        
+
                         try:
                             data_json = json.loads(data_str)
                             choices = data_json.get("choices", [])
-                            
+
                             if choices:
                                 choice = choices[0]
-                                
+
                                 # 先找 delta，找不到就找 message
                                 content_holder = choice.get("delta") or choice.get("message")
-                                
+
                                 if content_holder:
                                     content = content_holder.get("content", "")
                                     if content:
-                                        #print(f"Captured: {content}") 
+                                        #print(f"Captured: {content}")
                                         final_content += content
                                         yield content
                         except json.JSONDecodeError:
